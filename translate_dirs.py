@@ -5,14 +5,7 @@ import file_to_text
 import languages_dataset
 import text_to_words
 
-from deep_translator import GoogleTranslator
-from deep_translator.exceptions import RequestError
-
-from googletrans import Translator
-translator = Translator()
-
-
-import time
+import google_translate
 
 arguments = sys.argv[1:]
 
@@ -22,14 +15,6 @@ if len(arguments) != 2: # input and output dirs
 
 root_dir = os.path.expanduser(arguments[0])
 output_dir = os.path.expanduser(arguments[1])
-
-
-def write_text_to_file(filename, text):
-    directory = os.path.dirname(filename)
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    with open(filename, 'w') as file:
-        file.write(text)
 
 
 langs_dir = languages_dataset.get_languages_top_dirs(root_dir)
@@ -62,7 +47,7 @@ for lang in langs_dir:
 
             file_name = file_to_text.get_file_name_without_extension(file)
 
-            # write_text_to_file(output_dir + '/' + lang + '/' + file_name + 'cleaned-text.txt', clean_text(text))
+            # file_to_text.write_text_to_file(output_dir + '/' + lang + '/' + file_name + 'cleaned-text.txt', clean_text(text))
 
 
             if file_name not in file_words:
@@ -98,48 +83,7 @@ for lang in langs_dir:
                 thrown_string += f"{word},{count}\n"
 
 
-        # print(to_translate[-1])
-            
-
-
-        def translate_text(text, source_lang, target_language):
-            # try:
-            #     translation = translator.translate(text, dest=target_language, src=source_lang)
-            #     return translation.text
-            #     # return GoogleTranslator(source=source_lang, target=target_language).translate(text)
-            # except RequestError as e:
-            #     print("Request error occurred:", str(e))
-            #     return None
-            # except Exception as e:
-            #     print("Error:", str(e))
-            #     return None
-            if target_language == 'zh':
-                target_language = 'zh-CN'
-
-            if source_lang == 'zh':
-                source_lang = 'zh-CN'
-
-            max_retries=6
-            attempt = 0
-            while attempt < max_retries:
-                try:
-                    translation = translator.translate(text, dest=target_language, src=source_lang)
-                    if translation.text:
-                        return translation.text
-                    else:
-                        print("Translation returned None. Retrying...")
-                        time.sleep(3)
-                        attempt += 1
-                except RequestError as e:
-                    print("Request error occurred:", str(e))
-                    attempt += 1
-                except Exception as e:
-                    print("Error:", str(e))
-                    attempt += 1
-            
-            print("Maximum retries reached. Translation failed.")
-            return None
-       
+        # print(to_translate[-1])       
 
         for trans_lang in langs_to_translate:
             if trans_lang == lang:
@@ -157,7 +101,7 @@ for lang in langs_dir:
             for chunk in to_translate:
                 good_translation=True
                 # chunk_content = chunk.replace('\n', ' ')
-                translated_chunk = translate_text(chunk, lang, trans_lang)
+                translated_chunk = google_translate.translate_text(chunk, lang, trans_lang)
                 if translated_chunk == None:
                     good_translation=False
                     print("chunk is NONE!!!")
@@ -168,17 +112,17 @@ for lang in langs_dir:
                     translate_result += f"\n{translated_chunk}"
 
             translate_result = translate_result.replace('.', ',')
-            write_text_to_file(output_dir + '/' + lang + ('/translations/' if good_translation else '/bad-translations/' ) + trans_lang + '.txt', translate_result.lower())
+            file_to_text.write_text_to_file(output_dir + '/' + lang + ('/translations/' if good_translation else '/bad-translations/' ) + trans_lang + '.txt', translate_result.lower())
 
-            # write_text_to_file(output_dir + '/' + lang + '/translations/' + trans_lang + '.txt', translate_result)
-
-
+            # file_to_text.write_text_to_file(output_dir + '/' + lang + '/translations/' + trans_lang + '.txt', translate_result)
 
 
 
-        write_text_to_file(output_dir + '/' + lang + '/' + 'output.txt', output_string)
-        # write_text_to_file(output_dir + '/' + lang + '/' + 'counts.txt', output_counted)
-        # write_text_to_file(output_dir + '/' + lang + '/' + 'thrown.txt', thrown_string)
+
+
+        file_to_text.write_text_to_file(output_dir + '/' + lang + '/' + 'output.txt', output_string)
+        # file_to_text.write_text_to_file(output_dir + '/' + lang + '/' + 'counts.txt', output_counted)
+        # file_to_text.write_text_to_file(output_dir + '/' + lang + '/' + 'thrown.txt', thrown_string)
 
 
 

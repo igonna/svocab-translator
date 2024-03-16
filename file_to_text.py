@@ -1,10 +1,6 @@
 import fitz  # Importing PyMuPDF
 import os
 import file
-
-
-
-import PyPDF2
 from langdetect import detect
 
 
@@ -33,3 +29,11 @@ def read_text_file(file_path):
 
 def detect_language(text):
     return detect(text)
+
+
+def write_text_to_file(filename, text):
+    directory = os.path.dirname(filename)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    with open(filename, 'w') as file:
+        file.write(text)
