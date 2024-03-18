@@ -66,9 +66,9 @@ for lang_dir in lang_dirs:
     main_words = get_words_from_file(root_dir + '/' + lang_dir + '/' + 'output.txt')
     main_topics_words = get_topics_for_sizes(main_words, get_topic_sizes_for_lang(len(main_words)))
     for index, words in enumerate(main_topics_words):
-        topic_text = '.'.join(words)
+        topic_text = '.'.join(words).replace("'", "''")
         file_to_text.write_text_to_file(output_dir + '/' + lang_dir + '/' + topics_names[index] + '/' + 'output.txt', topic_text)
-        output_instructions += f"\n('{topics_names[index]}', '{lang_dir}', \"{topic_text}\"),"
+        output_instructions += f"\n('{topics_names[index]}', '{lang_dir}', '{topic_text}'),"
 
 
 
@@ -80,10 +80,10 @@ for lang_dir in lang_dirs:
         translation_lang = file_to_text.get_file_name_without_extension(file)
         
         for index, words_ in enumerate(translation_topic_words):
-            translation_topic_text = '.'.join(words_)
+            translation_topic_text = '.'.join(words_).replace("'", "''")
             out_path = output_dir + '/' + lang_dir + '/' + topics_names[index] + '/translations/' + file_to_text.get_file_name_without_extension(file) + '.txt'
             file_to_text.write_text_to_file(out_path, translation_topic_text)
-            output_instructions_translations += f"\n('{topics_names[index]}', '{lang_dir}', '{translation_lang}', \"{topic_text}\"),"
+            output_instructions_translations += f"\n('{topics_names[index]}', '{lang_dir}', '{translation_lang}', '{translation_topic_text}'),"
 
 output_instructions = output_instructions [:-1] + ';'
 output_instructions_translations = output_instructions_translations [:-1] + ';'
