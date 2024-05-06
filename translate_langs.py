@@ -1,5 +1,5 @@
 import json
-import google_translate
+import lib.google_translate as google_translate
 import re
 
 
@@ -68,11 +68,16 @@ for dst_lang in dst_langs:
 lang_codes = list(names.keys())
 
 
+# output_instructions = ''
+
 output_instructions = 'INSERT INTO vocab_data.languages (lang_tag, popularity, title_translations) values'
 
 for lang_code in lang_codes:
     translations_row_str = json.dumps(names_translated[lang_code], ensure_ascii=False)
     output_instructions += f"\n('{lang_code}', {popularities[lang_code]}, '{translations_row_str}'),"
+
+
+    # output_instructions += f"\nUPDATE vocab_data.languages SET title_translations = '{translations_row_str}' WHERE lang_tag = '{lang_code}';"
 
 output_instructions = output_instructions [:-1] + ';'
 print(output_instructions)

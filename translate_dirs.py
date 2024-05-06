@@ -1,11 +1,11 @@
 from collections import Counter
 import sys
 import os
-import file_to_text
-import languages_dataset
-import text_to_words
+import lib.file_to_text as file_to_text
+import lib.languages_dataset as languages_dataset
+import lib.text_to_words as text_to_words
 
-import google_translate
+import lib.google_translate as google_translate
 
 arguments = sys.argv[1:]
 
