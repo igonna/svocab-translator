@@ -84,7 +84,7 @@ def text_to_words_1(text, lang):
             current_word += char
         else:
             if len(current_word) != 0:
-                if char == new_line_char:
+                if char == new_line_char and prev_char in continue_word_chars:
                     if current_word[-1] in continue_word_chars:
                         current_word[:-1]
                 else:
@@ -112,8 +112,8 @@ def text_to_words_1(text, lang):
     return words_counts
 
 for lang in langs_dir:
-    if lang != 'en':
-        continue
+    # if lang != 'en':
+    #     continue
     files = langs_dir[lang]
     
     files_words_frequencies = []
@@ -128,6 +128,9 @@ for lang in langs_dir:
         word_frequencies = {key: value / count_keys for key, value in words_counts.items()}
         files_words_frequencies.append(word_frequencies)
         all_unique_words.update(words_counts.keys())
+        
+        file_to_text.write_text_to_file(output_dir + '/' + lang + '/' + file_to_text.get_file_name_without_extension(file) + '.txt', ', '.join(word_frequencies.keys()))
+        
         
         
     files_count = len(files_words_frequencies)
@@ -146,6 +149,9 @@ for lang in langs_dir:
             result_words[word] = freq_sum
 
 
+
+
+
     # print(len(all_unique_words))
     
     
@@ -158,4 +164,3 @@ for lang in langs_dir:
     file_to_text.write_text_to_file(output_dir + '/' + lang + '.txt', result)
     # exit(0)
     
-            # file_to_text.write_text_to_file(output_dir + '/' + lang + '/' + file_to_text.get_file_name_without_extension(file) + '.txt', ', '.join(words))
