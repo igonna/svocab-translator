@@ -1,5 +1,5 @@
 import json
-import lib.google_translate as google_translate
+import loc_lib.google_translate as google_translate
 import re
 
 

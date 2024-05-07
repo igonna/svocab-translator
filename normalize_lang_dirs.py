@@ -1,8 +1,8 @@
-import lib.languages_dataset as languages_dataset
+import loc_lib.languages_dataset as languages_dataset
 import sys
 import os
-import lib.languages_dataset as languages_dataset
-import lib.file_to_text as file_to_text
+import loc_lib.languages_dataset as languages_dataset
+import loc_lib.file_to_text as file_to_text
 
 arguments = sys.argv[1:]
 
