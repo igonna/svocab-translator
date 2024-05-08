@@ -61,6 +61,24 @@ total_count_phrases = 0
 
 word_phrases = get_word_phrases_from_db(db_cur)
 
+def capitalize_first_char(s):
+    if len(s) > 0:
+        return s[0].upper() + s[1:]
+    else:
+        return s
+    
+    
+# def add_phrase_to_db(db_conn, db_cur, word_phrase_data: WordPhraseData):
+#   sql = """
+#     INSERT INTO words_phrase (lang, word_en_key, word, phrase)
+#     VALUES (%s, %s, %s, %s)
+#     ON CONFLICT (lang, word_en_key, word) DO UPDATE
+#     SET phrase = EXCLUDED.phrase
+#   """
+#   data = (word_phrase_data.lang, word_phrase_data.word_en_key, word_phrase_data.word, word_phrase_data.phrase)
+#   db_cur.execute(sql, data)
+#   db_conn.commit()
+
 for word_phrase in word_phrases:
     # if word_phrase.lang == 'en':
     #     total_count_phrases += 1
@@ -73,6 +91,13 @@ for word_phrase in word_phrases:
 
 
     if word_phrase.phrase[0].islower():
+        
+        # add_phrase_to_db(db_conn, db_cur, WordPhraseData(word_phrase.lang, word_phrase.word_en_key, word_phrase.word, capitalize_first_char(word_phrase.phrase)))
+        # print("was ***: ", word_phrase.phrase)
+        # print("become ***: ", )
+        
+        
+        
         count_phrases += 1
 
     # crop_period(word_phrase.phrase)

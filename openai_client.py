@@ -154,8 +154,14 @@ def crop_period(string):
   else:
     return string
 
+def capitalize_first_char(s):
+    if len(s) > 0:
+        return s[0].upper() + s[1:]
+    else:
+        return s
+
 def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list[WordPhraseData]:
-  src_word = src_word.tolower()
+  src_word = src_word.lower()
   src_phrase = ''
   prompt_lines = prompt_result.split('\n')
 
@@ -184,11 +190,11 @@ def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list
         if not is_phrase_legal(src_phrase, src_lang):
           raise ValueError("not valid phrase = illegal")
         
-        word_phrase_list.append(WordPhraseData(src_lang, word_en_key=src_word, word=src_word, phrase=src_phrase))
+        src_phrase_words = text_to_words.text_to_words_1(src_phrase.lower(), src_lang)
+        if src_word not in src_phrase_words:
+          raise ValueError("ai identified word as not valid, or phrase not contains a word")
         
-        phrase_words = text_to_words.text_to_words_1(src_phrase.lower(), src_lang)
-        if src_word not in phrase_words:
-          raise ValueError("ai identified word as not valid, or phrase not contains it")
+        word_phrase_list.append(WordPhraseData(src_lang, word_en_key=src_word, word=src_word, phrase=capitalize_first_char(src_phrase)))
     else:
       if index == 0:
         raise ValueError("dst content not valid")
@@ -203,8 +209,7 @@ def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list
         if not is_phrase_legal(dst_phrase, line_lang):
           raise ValueError("not valid phrase = illegal")
         
-        word_phrase_list.append(WordPhraseData(line_lang, word_en_key=src_word, word=dst_word, phrase=dst_phrase))
-        
+        word_phrase_list.append(WordPhraseData(line_lang, word_en_key=src_word, word=dst_word, phrase=capitalize_first_char(dst_phrase)))
   return word_phrase_list
 
 # OpenAI
