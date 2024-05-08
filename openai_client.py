@@ -1,6 +1,10 @@
 import re
 from openai import OpenAI
 import psycopg2
+import loc_lib.file_to_text as file_to_text
+import sys
+import os
+import loc_lib.text_to_words as text_to_words
 
 # db_conn = psycopg2.connect(
 #   dbname="svocab_ai_translations",
@@ -9,6 +13,18 @@ import psycopg2
 # )
 
 # db_cur = db_conn.cursor()
+
+
+arguments = sys.argv[1:]
+
+if len(arguments) != 1:
+    print("arguments count is not 1")
+    exit(1)
+
+input_file = os.path.expanduser(arguments[0])
+
+
+
 
 class WordPhraseData:
   def __init__(self, lang, word_en_key, word, phrase):
@@ -139,6 +155,7 @@ def crop_period(string):
     return string
 
 def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list[WordPhraseData]:
+  src_word = src_word.tolower()
   src_phrase = ''
   prompt_lines = prompt_result.split('\n')
 
@@ -168,6 +185,10 @@ def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list
           raise ValueError("not valid phrase = illegal")
         
         word_phrase_list.append(WordPhraseData(src_lang, word_en_key=src_word, word=src_word, phrase=src_phrase))
+        
+        phrase_words = text_to_words.text_to_words_1(src_phrase.lower(), src_lang)
+        if src_word not in phrase_words:
+          raise ValueError("ai identified word as not valid, or phrase not contains it")
     else:
       if index == 0:
         raise ValueError("dst content not valid")
@@ -183,6 +204,7 @@ def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list
           raise ValueError("not valid phrase = illegal")
         
         word_phrase_list.append(WordPhraseData(line_lang, word_en_key=src_word, word=dst_word, phrase=dst_phrase))
+        
   return word_phrase_list
 
 # OpenAI
@@ -249,8 +271,8 @@ def process_words(db_conn, db_cur, words, langs):
 
 
 langs = ['en', 'sp', 'it', 'pt', 'fr', 'de', 'ru', 'zh']
-words = ['the']
 
+words = file_to_text.read_text_file(input_file).lower().split('\n')
 
 conn_params = {
   'dbname':'svocab_ai_translations',

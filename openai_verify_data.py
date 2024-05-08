@@ -1,5 +1,6 @@
 import re
 import psycopg2
+import loc_lib.text_to_words as text_to_words
 
 db_conn = psycopg2.connect(
   dbname="svocab_ai_translations",
@@ -35,88 +36,61 @@ def get_word_phrases_from_db(db_cur) -> list[WordPhraseData]:
     return word_phrase_list
 
 
-word_phrases = get_word_phrases_from_db(db_cur)
 
 def word_phrase_to_str(word_phrase: WordPhraseData):
    return word_phrase.lang + '* *' + word_phrase.word_en_key + '* *' + word_phrase.word + '* *' + word_phrase.phrase + '*'
 
 
 
-unique_not_alphas = set()
-def update_not_alphas(s):
-    for char in s:
-        if not char.isalpha():
-            unique_not_alphas.add(char)
+def add_phrase_to_db(db_conn, db_cur, word_phrase_data: WordPhraseData):
+  sql = """
+    INSERT INTO words_phrase (lang, word_en_key, word, phrase)
+    VALUES (%s, %s, %s, %s)
+    ON CONFLICT (lang, word_en_key, word) DO UPDATE
+    SET phrase = EXCLUDED.phrase
+  """
+  data = (word_phrase_data.lang, word_phrase_data.word_en_key, word_phrase_data.word, word_phrase_data.phrase)
+  db_cur.execute(sql, data)
+  db_conn.commit()
 
-
-def is_word_legal(word):
-    if len(word) == 0:
-        return False
-
-    
-    if word[0].isalpha() == False or word[-1].isalpha() == False:
-        return False
-    
-    word_legal_not_alphas = {'-', '\'', ' '}
-    
-    legal_alphas_count = 0
-    for char in word:
-        if not char.isalpha():
-            if char in word_legal_not_alphas:
-                legal_alphas_count += 1
-                if legal_alphas_count > 1:
-                    return False
-            else:
-                return False
-    return True
-
-def is_phrase_legal(phrase, lang):
-    phrase_legal_not_alphas = {'!', '?', '.', '¿', '-', '\'', ' ', ',', '，', '！', '。', '？', '’', '—', '–'}
-    
-    if len(phrase) == 0:
-        return False
-    
-    if not phrase[0].isalpha():
-        return False
-    
-    prev_char = ''
-    word_count = 0
-    for char in phrase:
-        if prev_char == ' ' and char == ' ':
-            return False
-            
-        if char.isalpha():
-            if prev_char == ' ' or prev_char == '':
-                word_count += 1
-        elif char not in phrase_legal_not_alphas:
-            return False
-                
-        prev_char = char
-        
-    if word_count < 2 and lang != 'zh':
-        return False
-    
-    return True
 
 not_valid_word_en_keys = set()
 
-count_rows = 0
-count_substr = 0
-for word_phrase in word_phrases:
-    count_rows += 1
-    if word_phrase.word in word_phrase.phrase:
-        count_substr += 1
-    # update_not_alphas(word_phrase.phrase)
-    # if not is_word_legal(word_phrase.word):
-    #     not_valid_word_en_keys.add(word_phrase.word_en_key)
-    #     continue
-    
-    # if not is_phrase_legal(word_phrase.phrase, word_phrase.lang):
-    #     not_valid_word_en_keys.add(word_phrase.word_en_key)
-    #     print(word_phrase_to_str(word_phrase))
+count_phrases = 0
+total_count_phrases = 0
 
-print(count_rows)
-print(count_substr)
+word_phrases = get_word_phrases_from_db(db_cur)
+
+for word_phrase in word_phrases:
+    # if word_phrase.lang == 'en':
+    #     total_count_phrases += 1
+    #     words = text_to_words.text_to_words_1(word_phrase.phrase.lower(), word_phrase.lang)
+    #     if word_phrase.word not in words:
+    #         print(word_phrase.phrase, ' *** ', word_phrase.word)
+    #         print(words.keys())
+    #         count_phrases += 1
+    #         not_valid_word_en_keys.add(word_phrase.word_en_key)
+
+
+    if word_phrase.phrase[0].islower():
+        count_phrases += 1
+
+    # crop_period(word_phrase.phrase)
+    # if word_phrase.word in word_phrase.phrase:
+    #     count_substr += 1
+
+
+
+
+# phrase = 'I did my homework'
+
+# print(phrase)
+# print(text_to_words.text_to_words_1(phrase.lower(), 'en').keys())
+
+# print(total_count_phrases)
+print(count_phrases)
+
+# print(not_valid_word_en_keys)
 
 
 # print(len(not_valid_word_en_keys))

@@ -1,0 +1,7 @@
+openai
+pymupdf
+psycopg2
+langdetect
+nltk
+jieba
+konlpy

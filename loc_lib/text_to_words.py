@@ -63,3 +63,85 @@ def get_words_from_text(text, lang):
         return _get_words_from_zh(text)
     elif lang == 'ko':
         return _get_words_from_ko(text)
+    
+    
+
+
+one_len_words_by_language = {
+    'en': {'a', 'i'},
+    'es': {'y', 'o', 'u'},
+    'it': {'a', 'e', 'o'},
+    'pt': {'a', 'e', 'o'},
+    'fr': {'à', 'c', 'ù'},
+    'de': {'a', 'u', 'o'},
+    'ru': {'и', 'а', 'у'}
+}
+
+
+words_to_remove_by_language = {
+    'en': {"the", "a", "an"},
+    'es': {"el", "la", "los", "las", "un", "una", "unos", "unas"},
+    'it': {"il", "la", "i", "le", "un", "una", "dei", "delle"},
+    'pt': {"o", "a", "os", "as", "um", "uma", "uns", "umas"},
+    'fr': {"le", "la", "les", "un", "une", "des"},
+    'de': {"der", "die", "das", "die", "ein", "eine", "einen", "einem", "einer", "eines", "einige", "einigen", "einiger"},
+}
+
+
+continue_word_chars = {'—', '-','–'}
+single_quotes_chars = {'\'', "'"}
+new_line_char = '\n'
+
+def clean_word(word):
+    if len(word) <= 1:
+        return word
+    
+    start = 0
+    while start < len(word) and not word[start].isalpha():
+        start += 1
+    
+    end = len(word) - 1
+    while end >= 0 and not word[end].isalpha():
+        end -= 1
+
+    return word[start:end + 1]
+    
+def text_to_words_1(text, lang):
+    text += ' '
+    words_counts = {}
+    add_word = lambda key: words_counts.update({key: words_counts.get(key, 0) + 1})
+    
+    current_word = ''
+    prev_char = ''
+    
+    for char in text:
+        if char.isalpha() or (char in single_quotes_chars and len(current_word) != 0) or char in continue_word_chars:
+            current_word += char
+        else:
+            if len(current_word) != 0:
+                if char == new_line_char and prev_char in continue_word_chars:
+                    if current_word[-1] in continue_word_chars:
+                        current_word[:-1]
+                else:
+                # if not (char == new_line_char and prev_char in continue_word_chars):
+                    current_word = clean_word(current_word)
+                    
+                    if lang in words_to_remove_by_language:
+                        if current_word in words_to_remove_by_language[lang]:
+                            current_word = ''
+                    
+                    word_len = len(current_word)
+                    if word_len != 0:
+                        if word_len == 1:
+                            if lang in one_len_words_by_language:
+                                if current_word in one_len_words_by_language[lang]:
+                                    add_word(current_word)                                    
+                                current_word = ''
+                            else:                                
+                                add_word(current_word)
+                                current_word = ''
+                        else:
+                            add_word(current_word)
+                            current_word = ''
+        prev_char = char
+    return words_counts
