@@ -22,8 +22,8 @@ output_dir = os.path.expanduser(arguments[1])
 langs_dir = languages_dataset.get_languages_top_dirs(root_dir)
 
 for lang in langs_dir:
-    # if lang != 'en':
-    #     continue
+    if lang != 'en':
+        continue
     files = langs_dir[lang]
     
     files_words_frequencies = []
@@ -33,7 +33,7 @@ for lang in langs_dir:
             continue
         text = file_to_text.read_text_file(file).lower()
         
-        words_counts = file_to_text.text_to_words_1(text, lang)
+        words_counts = text_to_words.text_to_words_1(text, lang)
         count_keys = len(words_counts)
         word_frequencies = {key: value / count_keys for key, value in words_counts.items()}
         files_words_frequencies.append(word_frequencies)
