@@ -60,6 +60,20 @@ def add_new_phrase_to_db(db_conn, db_cur, word_phrase_data: NewWordPhraseData):
   data = (word_phrase_data.src_lang, word_phrase_data.src_word, word_phrase_data.dst_lang, word_phrase_data.dst_word, word_phrase_data.phrase)
   db_cur.execute(sql, data)
   db_conn.commit()
+  
+  
+def get_duplicates_db(db_conn, db_cur):
+  sql = """SELECT src_word, dst_lang, COUNT(*)
+    FROM words_phrase
+    WHERE src_lang IN ('sp', 'es')
+    GROUP BY src_word, dst_lang
+    HAVING COUNT(*) > 1;
+  """
+  db_cur.execute(sql)
+  results = db_cur.fetchall()
+  duplicates = [(row[0], row[1]) for row in results]
+
+  return duplicates
 
 
 not_valid_word_en_keys = set()
@@ -67,7 +81,7 @@ not_valid_word_en_keys = set()
 count_phrases = 0
 total_count_phrases = 0
 
-word_phrases = get_word_phrases_from_db(db_cur)
+# word_phrases = get_word_phrases_from_db(db_cur)
 
 def capitalize_first_char(s):
     if len(s) > 0:
@@ -75,7 +89,40 @@ def capitalize_first_char(s):
     else:
         return s
     
+
+
+# def add_new_phrase_to_db(db_conn, db_cur, word_phrase_data: NewWordPhraseData):
+#   sql = """
+#     INSERT INTO words_phrase (src_lang, src_word, dst_lang, dst_word, phrase)
+#     VALUES (%s, %s, %s, %s, %s)
+#     ON CONFLICT (src_lang, src_word, dst_lang, dst_word) DO UPDATE
+#     SET phrase = EXCLUDED.phrase
+#   """
+#   data = (word_phrase_data.src_lang, word_phrase_data.src_word, word_phrase_data.dst_lang, word_phrase_data.dst_word, word_phrase_data.phrase)
+#   db_cur.execute(sql, data)
+#   db_conn.commit()
+  
     
+def remove_duplicate_db(db_conn, db_cur, duplicate_src_word):
+  sql = """
+    DELETE FROM words_phrase where src_lang = 'sp' and src_word=%s
+  """
+  data = (duplicate_src_word,)
+
+  db_cur.execute(sql, data)
+  db_conn.commit()
+
+
+duplicates = get_duplicates_db(db_conn, db_cur)
+print(len(duplicates))
+
+for duplicate in duplicates:
+  # print(duplicate)
+  remove_duplicate_db(db_conn, db_cur, duplicate[0])
+  # break
+
+
+
 # def add_phrase_to_db(db_conn, db_cur, word_phrase_data: WordPhraseData):
 #   sql = """
 #     INSERT INTO words_phrase (lang, word_en_key, word, phrase)
@@ -87,14 +134,14 @@ def capitalize_first_char(s):
 #   db_cur.execute(sql, data)
 #   db_conn.commit()
 
-for word_phrase in word_phrases:
-  if word_phrase.src_lang == word_phrase.dst_lang:
-    continue
-  if word_phrase.src_word == word_phrase.dst_word:
-    continue
-  if text_to_words.text_contain_word(word_phrase.dst_lang, word_phrase.phrase, word_phrase.dst_word):
-    print(word_phrase.phrase, ' **** ', word_phrase.dst_word)
-    total_count_phrases += 1
+# for word_phrase in word_phrases:
+#   if word_phrase.src_lang == word_phrase.dst_lang:
+#     continue
+#   if word_phrase.src_word == word_phrase.dst_word:
+#     continue
+#   if text_to_words.text_contain_word(word_phrase.dst_lang, word_phrase.phrase, word_phrase.dst_word):
+#     print(word_phrase.phrase, ' **** ', word_phrase.dst_word)
+#     total_count_phrases += 1
     
   
   

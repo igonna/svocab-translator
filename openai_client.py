@@ -160,6 +160,12 @@ def capitalize_first_char(s):
         return s[0].upper() + s[1:]
     else:
         return s
+      
+      
+def verify_or_replace_lang(lang):
+  if lang == 'sp':
+    lang = 'es'
+  return lang
 
 def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list[WordPhraseData]:
   src_word = src_word.lower()
@@ -167,6 +173,7 @@ def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list
   prompt_lines = prompt_result.split('\n')
 
   word_phrase_list = []
+  langs_already_in_list = set()
 
   for index, line in enumerate(prompt_lines):
     line_len = len(line)
@@ -195,6 +202,11 @@ def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list
         if src_word not in src_phrase_words:
           raise ValueError("ai identified word as not valid, or phrase not contains a word")
         
+        if src_lang in langs_already_in_list:
+          raise ValueError("duplicate languages")
+        
+        langs_already_in_list.add(src_lang)
+        
         word_phrase_list.append(WordPhraseData(src_lang, src_word, src_lang, src_word, phrase=capitalize_first_char(src_phrase)))
     else:
       if index == 0:
@@ -209,6 +221,16 @@ def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list
         
         if not is_phrase_legal(dst_phrase, line_lang):
           raise ValueError("not valid phrase = illegal")
+        
+        line_lang = verify_or_replace_lang(line_lang)
+        
+        if len(line_lang) != 2:
+          raise ValueError("not valid language length")
+        
+        if line_lang in langs_already_in_list:
+          raise ValueError("duplicate languages")
+        
+        langs_already_in_list.add(line_lang)
         
         word_phrase_list.append(WordPhraseData(src_lang, src_word, line_lang, dst_word, phrase=capitalize_first_char(dst_phrase)))
   return word_phrase_list
@@ -246,7 +268,7 @@ def process_words(db_conn, db_cur, words, langs):
       skip = is_all_langs_for_word_in_db(db_cur, langs, src_lang, src_word)
       
       if skip:
-        # print("-- already exists (skip) word: ", src_word)
+        print("-- already exists (skip) word: ", src_word)
         continue
 
       prompt_response = openai_get_phrases_and_words(src_lang, src_word, current_prompt_target_langs)

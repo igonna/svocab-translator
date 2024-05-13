@@ -24,6 +24,23 @@
 
 
 
+SELECT src_word, dst_lang, COUNT(*)
+FROM words_phrase
+WHERE dst_lang IN ('sp', 'es')
+GROUP BY src_word, dst_lang
+HAVING COUNT(*) > 1;
+
+-- Create a temporary table to hold duplicates
+CREATE TEMP TABLE temp_duplicates AS
+SELECT src_word, dst_lang, COUNT(*) as duplicate_count
+FROM words_phrase
+WHERE src_lang IN ('sp', 'es')
+GROUP BY src_word, dst_lang
+HAVING COUNT(*) > 1;
+
+SELECT * FROM temp_duplicates;
+
+
 
 
 CREATE EXTENSION IF NOT EXISTS hstore;
