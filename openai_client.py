@@ -27,20 +27,21 @@ input_file = os.path.expanduser(arguments[0])
 
 
 class WordPhraseData:
-  def __init__(self, lang, word_en_key, word, phrase):
-    self.lang = lang
-    self.word_en_key = word_en_key
-    self.word = word
+  def __init__(self, src_lang, src_word, dst_lang, dst_word, phrase):
+    self.src_lang = src_lang
+    self.src_word = src_word
+    self.dst_lang = dst_lang
+    self.dst_word = dst_word
     self.phrase = phrase
 
 def add_phrase_to_db(db_conn, db_cur, word_phrase_data: WordPhraseData):
   sql = """
-    INSERT INTO words_phrase (lang, word_en_key, word, phrase)
-    VALUES (%s, %s, %s, %s)
-    ON CONFLICT (lang, word_en_key, word) DO UPDATE
-    SET phrase = EXCLUDED.phrase
+    INSERT INTO words_phrase (src_lang, src_word, dst_lang, dst_word, phrase)
+    VALUES (%s, %s, %s, %s, %s)
+    ON CONFLICT (src_lang, src_word, dst_lang) DO UPDATE
+    SET phrase = EXCLUDED.phrase, dst_word= EXCLUDED.dst_word
   """
-  data = (word_phrase_data.lang, word_phrase_data.word_en_key, word_phrase_data.word, word_phrase_data.phrase)
+  data = (word_phrase_data.src_lang, word_phrase_data.src_word, word_phrase_data.dst_lang, word_phrase_data.dst_word, word_phrase_data.phrase)
   db_cur.execute(sql, data)
   db_conn.commit()
 
@@ -57,28 +58,28 @@ def add_prompt_result_to_db(db_conn, db_cur, src_lang, src_word, target_langs, p
   db_conn.commit()
 
 
-def get_word_phrase_from_db(db_cur, lang, word, word_en_key=''):
+def get_word_phrase_from_db(db_cur, dst_lang, src_lang, src_word):
   sql = """
-    SELECT lang, word_en_key, word, phrase
+    SELECT src_lang, src_word, dst_lang, dst_word, phrase
     FROM words_phrase
-    WHERE lang = %s AND """ + ("word = %s" if word_en_key == '' else "(word_en_key = %s OR word = %s)") + """
+    WHERE src_lang = %s AND dst_lang = %s AND src_word = %s
     LIMIT 1
   """
 
   # print(sql)
-  data = (lang, word) if word_en_key == '' else (lang, word_en_key, word)
+  data = (src_lang, dst_lang, src_word)
   db_cur.execute(sql, data)
   row = db_cur.fetchone()
 
   if row is None:
     return None
   
-  return WordPhraseData(row[0], row[1], row[2], row[3])
+  return WordPhraseData(row[0], row[1], row[2], row[3], row[4])
 
-def is_all_langs_for_word_in_db(db_cur, langs, word, word_en_key=''):
+def is_all_langs_for_word_in_db(db_cur, langs, src_lang, src_word):
   exists_count = 0
-  for lang in langs:
-    result = get_word_phrase_from_db(db_cur, lang, word, word_en_key)
+  for dst_lang in langs:
+    result = get_word_phrase_from_db(db_cur, dst_lang, src_lang, src_word)
     if result is not None:
       exists_count += 1
   return exists_count == len(langs)
@@ -194,7 +195,7 @@ def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list
         if src_word not in src_phrase_words:
           raise ValueError("ai identified word as not valid, or phrase not contains a word")
         
-        word_phrase_list.append(WordPhraseData(src_lang, word_en_key=src_word, word=src_word, phrase=capitalize_first_char(src_phrase)))
+        word_phrase_list.append(WordPhraseData(src_lang, src_word, src_lang, src_word, phrase=capitalize_first_char(src_phrase)))
     else:
       if index == 0:
         raise ValueError("dst content not valid")
@@ -209,7 +210,7 @@ def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list
         if not is_phrase_legal(dst_phrase, line_lang):
           raise ValueError("not valid phrase = illegal")
         
-        word_phrase_list.append(WordPhraseData(line_lang, word_en_key=src_word, word=dst_word, phrase=capitalize_first_char(dst_phrase)))
+        word_phrase_list.append(WordPhraseData(src_lang, src_word, line_lang, dst_word, phrase=capitalize_first_char(dst_phrase)))
   return word_phrase_list
 
 # OpenAI
@@ -232,16 +233,18 @@ def openai_get_phrases_and_words(src_lang, src_word, target_langs):
 
 periods = ['。', '.']
 
+
 def process_words(db_conn, db_cur, words, langs):
   for src_lang in langs:
-    if src_lang != 'en':
+    if src_lang != 'es':
       continue
 
     target_langs_array = [lang for lang in langs if lang != src_lang]
     current_prompt_target_langs = ', '.join(target_langs_array)
 
     for src_word in words:
-      skip = is_all_langs_for_word_in_db(db_cur, langs, src_word, src_word if src_lang == 'en' else '')
+      skip = is_all_langs_for_word_in_db(db_cur, langs, src_lang, src_word)
+      
       if skip:
         # print("-- already exists (skip) word: ", src_word)
         continue
@@ -275,7 +278,7 @@ def process_words(db_conn, db_cur, words, langs):
         # exit(1)
 
 
-langs = ['en', 'sp', 'it', 'pt', 'fr', 'de', 'ru', 'zh']
+langs = ['en', 'es', 'it', 'pt', 'fr', 'de', 'ru', 'zh']
 
 words = file_to_text.read_text_file(input_file).lower().split('\n')
 
@@ -308,6 +311,9 @@ def process_words_th(conn_params, words, langs):
   try:
     with conn.cursor() as cur:
       process_words(conn, cur, words, langs)
+      print("finished---")
+  except Exception as e:
+    print("got error: ", e)
   finally:
     conn.close()
 

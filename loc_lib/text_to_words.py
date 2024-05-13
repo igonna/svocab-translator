@@ -145,3 +145,16 @@ def text_to_words_1(text, lang):
                             current_word = ''
         prev_char = char
     return words_counts
+
+
+
+def text_contain_word(lang, text, word):
+    if lang == 'zh':
+        return word in text
+    
+    words = text_to_words_1(text.lower(), lang)
+  
+    if word.lower() in words:
+        return True
+    
+    return False
