@@ -7,3 +7,4 @@ jieba
 konlpy
 googletrans
 deep_translator
+colorama

@@ -5,6 +5,13 @@ import loc_lib.file_to_text as file_to_text
 import sys
 import os
 import loc_lib.text_to_words as text_to_words
+import colorama
+from colorama import Back
+import time
+import httpx
+
+
+colorama.init(autoreset=True)
 
 # db_conn = psycopg2.connect(
 #   dbname="svocab_ai_translations",
@@ -18,12 +25,11 @@ import loc_lib.text_to_words as text_to_words
 arguments = sys.argv[1:]
 
 if len(arguments) != 1:
-    print("arguments count is not 1")
+    print(Back.RED + "arguments count is not 1")
     exit(1)
 
 input_file = os.path.expanduser(arguments[0])
-
-
+src_lang = file_to_text.get_file_name_without_extension(input_file)
 
 
 class WordPhraseData:
@@ -243,7 +249,10 @@ def openai_get_phrases_and_words(src_lang, src_word, target_langs):
     {"role": "user", "content": src_word}
   ]
 
-  client = OpenAI()
+  # client = OpenAI()
+  
+  client = OpenAI(timeout=httpx.Timeout(15.0, read=5.0, write=10.0, connect=3.0))
+
 
   completion = client.chat.completions.create(
     model="gpt-3.5-turbo",
@@ -256,48 +265,58 @@ def openai_get_phrases_and_words(src_lang, src_word, target_langs):
 periods = ['。', '.']
 
 
-def process_words(db_conn, db_cur, words, langs):
-  for src_lang in langs:
-    if src_lang != 'es':
+class ExceptionOpenAI(Exception):
+    pass
+
+def process_words(db_conn, db_cur, words, src_lang, langs):
+  # for src_lang in langs:
+  #   if src_lang != 'es':
+  #     continue
+
+  target_langs_array = [lang for lang in langs if lang != src_lang]
+  current_prompt_target_langs = ', '.join(target_langs_array)
+
+  for src_word in words:
+    skip = is_all_langs_for_word_in_db(db_cur, langs, src_lang, src_word)
+    
+    if skip:
+      # print("-- already exists (skip) word: ", src_word)
       continue
 
-    target_langs_array = [lang for lang in langs if lang != src_lang]
-    current_prompt_target_langs = ', '.join(target_langs_array)
-
-    for src_word in words:
-      skip = is_all_langs_for_word_in_db(db_cur, langs, src_lang, src_word)
-      
-      if skip:
-        print("-- already exists (skip) word: ", src_word)
-        continue
-
+    prompt_response = ''
+    
+    try:
       prompt_response = openai_get_phrases_and_words(src_lang, src_word, current_prompt_target_langs)
-      print(prompt_response)
+    except Exception as e:
+      raise ExceptionOpenAI(e)
+    
+    print(prompt_response)
+    prompt_parsed_status = False
+
+    try:
+      result_word_phrases = process_word_phrase_prompt_result(src_lang, src_word, prompt_response)
+      prompt_parsed_status = len(result_word_phrases) == len(langs)
+      
+      if prompt_parsed_status:
+        for wp in result_word_phrases:
+          if wp.phrase[-1] in periods:
+            wp.phrase = wp.phrase[:-1]
+          add_phrase_to_db(db_conn, db_cur, wp)
+        print(Back.GREEN + "PROCESS SUCCESSFULL")
+    except psycopg2.Error as e:
+      print("Database Execution happened:", e)
+      db_conn.rollback()
+      # exit(1)
+    except Exception as e:
+      print(Back.RED + 'process failed: ', e)
       prompt_parsed_status = False
 
-      try:
-        result_word_phrases = process_word_phrase_prompt_result(src_lang, src_word, prompt_response)
-        prompt_parsed_status = len(result_word_phrases) == len(langs)
-        
-        if prompt_parsed_status:
-          for wp in result_word_phrases:
-            if wp.phrase[-1] in periods:
-              wp.phrase = wp.phrase[:-1]
-            add_phrase_to_db(db_conn, db_cur, wp)
-      except psycopg2.Error as e:
-        print("Database Execution happened:", e)
-        db_conn.rollback()
-        # exit(1)
-      except Exception as e:
-        print('process failed: ', e)
-        prompt_parsed_status = False
-
-      try:
-        add_prompt_result_to_db(db_conn, db_cur, src_lang, src_word, current_prompt_target_langs, prompt_response, prompt_parsed_status)
-      except psycopg2.Error as e:
-        print("Database Execution happened:", e)
-        db_conn.rollback()
-        # exit(1)
+    try:
+      add_prompt_result_to_db(db_conn, db_cur, src_lang, src_word, current_prompt_target_langs, prompt_response, prompt_parsed_status)
+    except psycopg2.Error as e:
+      print("Database Execution happened:", e)
+      db_conn.rollback()
+      # exit(1)
 
 
 langs = ['en', 'es', 'it', 'pt', 'fr', 'de', 'ru', 'zh']
@@ -323,30 +342,56 @@ conn_params = {
 #       words_not_processed.append(src_word)
 #   return words_not_processed
 
-import multiprocessing
+# import multiprocessing
 import psycopg2.pool
+import threading
 
-def process_words_th(conn_params, words, langs):
+pool_len = 90
+
+openAiErrorCounter = 0
+lock = threading.Lock()
+
+def process_words_th(conn_params, words, src_lang, langs):
+  global openAiErrorCounter
+  
 
   conn = psycopg2.connect(**conn_params)
 
   try:
     with conn.cursor() as cur:
-      process_words(conn, cur, words, langs)
+      process_words(conn, cur, words, src_lang, langs)
       print("finished---")
+  except ExceptionOpenAI as e:
+    print(Back.RED + "open ai exception: ", "(", openAiErrorCounter, ")", e)
+    with lock:
+      openAiErrorCounter += 1
+
+    if openAiErrorCounter > pool_len * 0.4:
+      os._exit(1)
+    
+    conn.close()
+    sys.exit(1)
   except Exception as e:
-    print("got error: ", e)
+    print(Back.RED + "got error: ", e)
   finally:
     conn.close()
 
 def main():
-  pool_len = 90
 
   chunk_size = len(words) // pool_len
   chunks = [words[i:i+chunk_size] for i in range(0, len(words), chunk_size)]
+  
+  threads = []
+  for chunk in chunks:
+      t = threading.Thread(target=process_words_th, args=(conn_params, chunk, src_lang, langs))
+      threads.append(t)
+      t.start()
 
-  with multiprocessing.Pool(processes=pool_len) as pool:
-    pool.starmap(process_words_th, [(conn_params, chunk, langs) for chunk in chunks])
+  for t in threads:
+      t.join()
+
+  # with multiprocessing.Pool(processes=pool_len) as pool:
+  #   pool.starmap(process_words_th, [(conn_params, chunk, langs) for chunk in chunks])
 
 if __name__ == "__main__":
   main()
