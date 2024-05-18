@@ -81,7 +81,7 @@ not_valid_word_en_keys = set()
 count_phrases = 0
 total_count_phrases = 0
 
-# word_phrases = get_word_phrases_from_db(db_cur)
+word_phrases = get_word_phrases_from_db(db_cur)
 
 def capitalize_first_char(s):
     if len(s) > 0:
@@ -103,23 +103,23 @@ def capitalize_first_char(s):
 #   db_conn.commit()
   
     
-def remove_duplicate_db(db_conn, db_cur, duplicate_src_word):
-  sql = """
-    DELETE FROM words_phrase where src_lang = 'sp' and src_word=%s
-  """
-  data = (duplicate_src_word,)
+# def remove_duplicate_db(db_conn, db_cur, duplicate_src_word):
+#   sql = """
+#     DELETE FROM words_phrase where src_lang = 'sp' and src_word=%s
+#   """
+#   data = (duplicate_src_word,)
 
-  db_cur.execute(sql, data)
-  db_conn.commit()
+#   db_cur.execute(sql, data)
+#   db_conn.commit()
 
 
-duplicates = get_duplicates_db(db_conn, db_cur)
-print(len(duplicates))
+# duplicates = get_duplicates_db(db_conn, db_cur)
+# print(len(duplicates))
 
-for duplicate in duplicates:
-  # print(duplicate)
-  remove_duplicate_db(db_conn, db_cur, duplicate[0])
-  # break
+# for duplicate in duplicates:
+#   # print(duplicate)
+#   remove_duplicate_db(db_conn, db_cur, duplicate[0])
+#   # break
 
 
 
@@ -134,14 +134,22 @@ for duplicate in duplicates:
 #   db_cur.execute(sql, data)
 #   db_conn.commit()
 
-# for word_phrase in word_phrases:
-#   if word_phrase.src_lang == word_phrase.dst_lang:
-#     continue
-#   if word_phrase.src_word == word_phrase.dst_word:
-#     continue
-#   if text_to_words.text_contain_word(word_phrase.dst_lang, word_phrase.phrase, word_phrase.dst_word):
-#     print(word_phrase.phrase, ' **** ', word_phrase.dst_word)
-#     total_count_phrases += 1
+def is_word_in_db(db_cur, word, lang):
+  query = "SELECT 1 FROM words_phrase WHERE src_lang=%s and src_word = %s LIMIT 1"
+  data = (word, lang)
+  db_cur.execute(query, data)
+  result = db_cur.fetchone()
+  return result
+
+for word_phrase in word_phrases:
+  if word_phrase.src_lang == word_phrase.dst_lang:
+    continue
+  
+  if text_to_words.text_contain_word(word_phrase.dst_lang, word_phrase.phrase, word_phrase.dst_word):
+    if is_word_in_db(db_cur, word_phrase.dst_word, word_phrase.dst_lang):
+      continue
+    # print(word_phrase.phrase, ' **** ', word_phrase.dst_word)
+    total_count_phrases += 1
     
   
   

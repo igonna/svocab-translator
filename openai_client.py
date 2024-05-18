@@ -9,6 +9,8 @@ import colorama
 from colorama import Back
 import time
 import httpx
+import psycopg2.pool
+import threading
 
 
 colorama.init(autoreset=True)
@@ -127,6 +129,13 @@ def is_word_legal(word):
         return False
   return True
 
+def crop_first_and_last_quote(s):
+  if s.startswith("'"):
+    s = s[1:]
+  if s.endswith("'"):
+    s = s[:-1]
+  return s
+  
 def is_phrase_legal(phrase, lang):
   phrase_legal_not_alphas = {'!', '?', '.', '¿', '-', '\'', ' ', ',', '，', '！', '。', '？', '’', '—', '–'}
   
@@ -197,7 +206,8 @@ def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list
       if index != 0:
         raise ValueError("src content not valid")
       else:
-        src_phrase = crop_period(line_content_parts[0])
+        src_phrase = crop_first_and_last_quote(line_content_parts[0])
+        src_phrase = crop_period(src_phrase)
         if len(src_phrase) == 0:
           raise ValueError("not valid phrase len")
 
@@ -218,7 +228,8 @@ def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list
       if index == 0:
         raise ValueError("dst content not valid")
       else:
-        dst_phrase = crop_period(line_content_parts[0])
+        dst_phrase = crop_first_and_last_quote(line_content_parts[0])
+        dst_phrase = crop_period(dst_phrase)
         dst_word = line_content_parts[1].lower()
         if len(dst_phrase) == 0 or len(dst_word) == 0:
           raise ValueError("not valid phrase or word len")
@@ -268,7 +279,13 @@ periods = ['。', '.']
 class ExceptionOpenAI(Exception):
     pass
 
+error_count = 0
+success_count = 0
+process_lock = threading.Lock()
+
 def process_words(db_conn, db_cur, words, src_lang, langs):
+  global success_count
+  global error_count
   # for src_lang in langs:
   #   if src_lang != 'es':
   #     continue
@@ -303,13 +320,18 @@ def process_words(db_conn, db_cur, words, src_lang, langs):
             wp.phrase = wp.phrase[:-1]
           add_phrase_to_db(db_conn, db_cur, wp)
         print(Back.GREEN + "PROCESS SUCCESSFULL")
+        with process_lock:
+          success_count += 1
     except psycopg2.Error as e:
       print("Database Execution happened:", e)
       db_conn.rollback()
-      # exit(1)
+      with process_lock:
+        error_count += 1
     except Exception as e:
       print(Back.RED + 'process failed: ', e)
       prompt_parsed_status = False
+      with process_lock:
+          error_count += 1
 
     try:
       add_prompt_result_to_db(db_conn, db_cur, src_lang, src_word, current_prompt_target_langs, prompt_response, prompt_parsed_status)
@@ -343,16 +365,16 @@ conn_params = {
 #   return words_not_processed
 
 # import multiprocessing
-import psycopg2.pool
-import threading
 
 pool_len = 90
 
-openAiErrorCounter = 0
+open_ai_error_counter = 0
 lock = threading.Lock()
 
 def process_words_th(conn_params, words, src_lang, langs):
-  global openAiErrorCounter
+  global open_ai_error_counter
+  global success_count
+  global error_count
   
 
   conn = psycopg2.connect(**conn_params)
@@ -362,15 +384,21 @@ def process_words_th(conn_params, words, src_lang, langs):
       process_words(conn, cur, words, src_lang, langs)
       print("finished---")
   except ExceptionOpenAI as e:
-    print(Back.RED + "open ai exception: ", "(", openAiErrorCounter, ")", e)
-    with lock:
-      openAiErrorCounter += 1
+    print(Back.RED + "open ai exception: ", "(", open_ai_error_counter, ")", e)
+    print("success count: ", success_count)
+    print("error count: ", error_count)
+    os._exit(1)
 
-    if openAiErrorCounter > pool_len * 0.4:
-      os._exit(1)
+    # with lock:
+    #   open_ai_error_counter += 1
+
+    # if open_ai_error_counter > pool_len * 0.4:
+    #   print("success count: ", success_count)
+    #   print("error count: ", error_count)
+    #   os._exit(1)
     
-    conn.close()
-    sys.exit(1)
+    # conn.close()
+    # sys.exit(1)
   except Exception as e:
     print(Back.RED + "got error: ", e)
   finally:
