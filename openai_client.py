@@ -64,6 +64,43 @@ def add_prompt_result_to_db(db_conn, db_cur, src_lang, src_word, target_langs, p
   data = (src_lang, src_word, target_langs, prompt_response, process_success_status)
   db_cur.execute(sql, data)
   db_conn.commit()
+  
+  
+def add_disabled_word_to_db(db_conn, db_cur, src_lang, src_word):
+  sql = """
+    INSERT INTO disabled_word (src_lang, src_word)
+    VALUES (%s, %s)
+    ON CONFLICT (src_lang, src_word) DO UPDATE
+    SET count = disabled_word.count + 1
+  """
+
+  data = (src_lang, src_word)
+  db_cur.execute(sql, data)
+  db_conn.commit()
+  
+def remove_disabled_word_from_db(db_conn, db_cur, src_lang, src_word):
+  sql = """
+    DELETE FROM disabled_word WHERE src_lang=%s AND src_word=%s
+  """
+
+  data = (src_lang, src_word)
+  db_cur.execute(sql, data)
+  db_conn.commit()
+
+def get_disabled_word_count(db_cur, src_lang, src_word):
+  sql = """
+  SELECT count FROM disabled_word
+  WHERE src_lang = %s AND src_word = %s;
+  """
+  
+  data = (src_lang, src_word)
+  db_cur.execute(sql, data)
+  result = db_cur.fetchone()
+  
+  if result is None:
+    return 0
+  else:
+    return result[0]
 
 
 def get_word_phrase_from_db(db_cur, dst_lang, src_lang, src_word):
@@ -182,7 +219,10 @@ def verify_or_replace_lang(lang):
     lang = 'es'
   return lang
 
-def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list[WordPhraseData]:
+def process_word_phrase_prompt_result(db_conn, db_cur, src_lang, src_word, prompt_result) -> list[WordPhraseData]:
+  if get_disabled_word_count(db_cur, src_lang, src_word) > 1:
+    raise ValueError("word is disabled")
+
   src_word = src_word.lower()
   src_phrase = ''
   prompt_lines = prompt_result.split('\n')
@@ -216,7 +256,8 @@ def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list
         
         src_phrase_words = text_to_words.text_to_words_1(src_phrase.lower(), src_lang)
         if src_word not in src_phrase_words:
-          raise ValueError("ai identified word as not valid, or phrase not contains a word")
+          add_disabled_word_to_db(db_conn, db_cur, src_lang, src_word)
+          raise ValueError(f"ai identified word as not valid, or phrase not contains a word: {src_word}")
         
         if src_lang in langs_already_in_list:
           raise ValueError("duplicate languages")
@@ -250,6 +291,7 @@ def process_word_phrase_prompt_result(src_lang, src_word, prompt_result) -> list
         langs_already_in_list.add(line_lang)
         
         word_phrase_list.append(WordPhraseData(src_lang, src_word, line_lang, dst_word, phrase=capitalize_first_char(dst_phrase)))
+  remove_disabled_word_from_db(db_conn, db_cur, src_lang, src_word)
   return word_phrase_list
 
 # OpenAI
@@ -311,7 +353,7 @@ def process_words(db_conn, db_cur, words, src_lang, langs):
     prompt_parsed_status = False
 
     try:
-      result_word_phrases = process_word_phrase_prompt_result(src_lang, src_word, prompt_response)
+      result_word_phrases = process_word_phrase_prompt_result(db_conn, db_cur, src_lang, src_word, prompt_response)
       prompt_parsed_status = len(result_word_phrases) == len(langs)
       
       if prompt_parsed_status:
@@ -344,6 +386,7 @@ def process_words(db_conn, db_cur, words, src_lang, langs):
 langs = ['en', 'es', 'it', 'pt', 'fr', 'de', 'ru', 'zh']
 
 words = file_to_text.read_text_file(input_file).lower().split('\n')
+print("words count: ", len(words))
 
 conn_params = {
   'dbname':'svocab_ai_translations',
@@ -385,8 +428,9 @@ def process_words_th(conn_params, words, src_lang, langs):
       print("finished---")
   except ExceptionOpenAI as e:
     print(Back.RED + "open ai exception: ", "(", open_ai_error_counter, ")", e)
-    print("success count: ", success_count)
-    print("error count: ", error_count)
+    print(f"success count: {success_count}; error count: {error_count}")
+    print(f"success count: {success_count}; error count: {error_count}")
+    print(f"success count: {success_count}; error count: {error_count}")
     os._exit(1)
 
     # with lock:

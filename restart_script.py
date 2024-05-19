@@ -5,7 +5,7 @@ from time import sleep
 file_path = "openai_client.py"
 
 # Example arguments to be passed to the script
-args = ["/Users/c/Documents/svocab_data/datasets/words_output/fr.txt"]
+args = ["/Users/c/Documents/svocab_data/datasets/words_output/de.txt"]
 
 restart_timer = 55
 

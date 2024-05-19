@@ -47,3 +47,10 @@ CREATE TABLE prompt_response (
     process_success BOOLEAN NOT NULL,
     PRIMARY KEY (src_lang, src_word, target_langs)
 );
+
+CREATE TABLE disabled_word (
+    src_lang CHAR(2) NOT NULL,
+    src_word TEXT NOT NULL,
+    count INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (src_lang, src_word)
+);
