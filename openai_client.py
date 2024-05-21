@@ -219,10 +219,26 @@ def verify_or_replace_lang(lang):
     lang = 'es'
   return lang
 
-def process_word_phrase_prompt_result(db_conn, db_cur, src_lang, src_word, prompt_result) -> list[WordPhraseData]:
-  if get_disabled_word_count(db_cur, src_lang, src_word) > 1:
-    raise ValueError("word is disabled")
+def replace_line_lang_if_wrong(lang):
+  if lang == 'english':
+    return 'en'
+  if lang == 'italian':
+    return 'it'
+  if lang == 'spanish':
+    return 'es'
+  if lang == 'portuguese':
+    return 'pt'
+  if lang == 'french':
+    return 'fr'
+  if lang == 'german':
+    return 'de'
+  if lang == 'russian':
+    return 'ru'
+  if lang == 'chinese':
+    return 'zh'
+  return lang
 
+def process_word_phrase_prompt_result(db_conn, db_cur, src_lang, src_word, prompt_result) -> list[WordPhraseData]:
   src_word = src_word.lower()
   src_phrase = ''
   prompt_lines = prompt_result.split('\n')
@@ -235,7 +251,7 @@ def process_word_phrase_prompt_result(db_conn, db_cur, src_lang, src_word, promp
     if line_len == 0:
       continue
     
-    line_lang = get_lang_code_from_line(line).lower()
+    line_lang = replace_line_lang_if_wrong(get_lang_code_from_line(line).lower())
     line_content_parts = extract_phrases_from_line(line)
     line_content_parts_count = len(line_content_parts)
 
@@ -317,6 +333,11 @@ def openai_get_phrases_and_words(src_lang, src_word, target_langs):
 
 periods = ['。', '.']
 
+def replace_lang_for_ai(lang):
+  if lang == 'it':
+    return 'italian'
+  return lang
+
 
 class ExceptionOpenAI(Exception):
     pass
@@ -338,6 +359,9 @@ def process_words(db_conn, db_cur, words, src_lang, langs):
   for src_word in words:
     skip = is_all_langs_for_word_in_db(db_cur, langs, src_lang, src_word)
     
+    if get_disabled_word_count(db_cur, src_lang, src_word) > 1:
+      skip = True
+    
     if skip:
       # print("-- already exists (skip) word: ", src_word)
       continue
@@ -345,7 +369,7 @@ def process_words(db_conn, db_cur, words, src_lang, langs):
     prompt_response = ''
     
     try:
-      prompt_response = openai_get_phrases_and_words(src_lang, src_word, current_prompt_target_langs)
+      prompt_response = openai_get_phrases_and_words(replace_lang_for_ai(src_lang), src_word, current_prompt_target_langs)
     except Exception as e:
       raise ExceptionOpenAI(e)
     
@@ -409,7 +433,7 @@ conn_params = {
 
 # import multiprocessing
 
-pool_len = 90
+pool_len = 20
 
 open_ai_error_counter = 0
 lock = threading.Lock()
