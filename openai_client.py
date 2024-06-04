@@ -1,5 +1,6 @@
 import re
 from openai import OpenAI
+import httpx
 import psycopg2
 import loc_lib.file_to_text as file_to_text
 import sys
@@ -8,9 +9,9 @@ import loc_lib.text_to_words as text_to_words
 import colorama
 from colorama import Back
 import time
-import httpx
 import psycopg2.pool
 import threading
+import openai_utils
 
 
 colorama.init(autoreset=True)
@@ -130,15 +131,6 @@ def is_all_langs_for_word_in_db(db_cur, langs, src_lang, src_word):
   return exists_count == len(langs)
 
 
-def get_lang_code_from_line(line):
-  return line.split(':')[0].strip('{')
-
-def extract_phrases_from_line(line):
-  pattern = r'\{(.*?)\}'
-  matches = re.findall(pattern, line)
-  phrases = [match.strip() for match in matches]
-  return phrases
-
 def contains_only_alphabets(s):
   for char in s:
     if not char.isalpha():
@@ -212,31 +204,6 @@ def capitalize_first_char(s):
         return s[0].upper() + s[1:]
     else:
         return s
-      
-      
-def verify_or_replace_lang(lang):
-  if lang == 'sp':
-    lang = 'es'
-  return lang
-
-def replace_line_lang_if_wrong(lang):
-  if lang == 'english':
-    return 'en'
-  if lang == 'italian':
-    return 'it'
-  if lang == 'spanish':
-    return 'es'
-  if lang == 'portuguese':
-    return 'pt'
-  if lang == 'french':
-    return 'fr'
-  if lang == 'german':
-    return 'de'
-  if lang == 'russian':
-    return 'ru'
-  if lang == 'chinese':
-    return 'zh'
-  return lang
 
 def process_word_phrase_prompt_result(db_conn, db_cur, src_lang, src_word, prompt_result) -> list[WordPhraseData]:
   src_word = src_word.lower()
@@ -251,8 +218,8 @@ def process_word_phrase_prompt_result(db_conn, db_cur, src_lang, src_word, promp
     if line_len == 0:
       continue
     
-    line_lang = replace_line_lang_if_wrong(get_lang_code_from_line(line).lower())
-    line_content_parts = extract_phrases_from_line(line)
+    line_lang = openai_utils.replace_line_lang_if_wrong(openai_utils.get_lang_code_from_line(line).lower())
+    line_content_parts = openai_utils.extract_phrases_from_line(line)
     line_content_parts_count = len(line_content_parts)
 
     if line_content_parts_count < 1 or line_content_parts_count > 2:
@@ -269,11 +236,12 @@ def process_word_phrase_prompt_result(db_conn, db_cur, src_lang, src_word, promp
 
         if not is_phrase_legal(src_phrase, src_lang):
           raise ValueError("not valid phrase = illegal")
-        
+
         src_phrase_words = text_to_words.text_to_words_1(src_phrase.lower(), src_lang)
-        if src_word not in src_phrase_words:
-          add_disabled_word_to_db(db_conn, db_cur, src_lang, src_word)
-          raise ValueError(f"ai identified word as not valid, or phrase not contains a word: {src_word}")
+        if src_lang != 'zh':
+          if src_word not in src_phrase_words:
+            add_disabled_word_to_db(db_conn, db_cur, src_lang, src_word)
+            raise ValueError(f"ai identified word as not valid, or phrase not contains a word: {src_word}")
         
         if src_lang in langs_already_in_list:
           raise ValueError("duplicate languages")
@@ -296,7 +264,7 @@ def process_word_phrase_prompt_result(db_conn, db_cur, src_lang, src_word, promp
         if not is_phrase_legal(dst_phrase, line_lang):
           raise ValueError("not valid phrase = illegal")
         
-        line_lang = verify_or_replace_lang(line_lang)
+        line_lang = openai_utils.verify_or_replace_lang(line_lang)
         
         if len(line_lang) != 2:
           raise ValueError("not valid language length")
@@ -333,11 +301,6 @@ def openai_get_phrases_and_words(src_lang, src_word, target_langs):
 
 periods = ['。', '.']
 
-def replace_lang_for_ai(lang):
-  if lang == 'it':
-    return 'italian'
-  return lang
-
 
 class ExceptionOpenAI(Exception):
     pass
@@ -369,7 +332,7 @@ def process_words(db_conn, db_cur, words, src_lang, langs):
     prompt_response = ''
     
     try:
-      prompt_response = openai_get_phrases_and_words(replace_lang_for_ai(src_lang), src_word, current_prompt_target_langs)
+      prompt_response = openai_get_phrases_and_words(openai_utils.replace_lang_for_ai(src_lang), src_word, current_prompt_target_langs)
     except Exception as e:
       raise ExceptionOpenAI(e)
     
