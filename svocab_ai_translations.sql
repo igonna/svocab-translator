@@ -2,6 +2,17 @@
 -- db_user = svocab_ai_translator
 -- db_password = 12345
 
+
+CREATE TABLE word_phrase_pair (
+    src_lang CHAR(2) NOT NULL,
+    dst_lang CHAR(2) NOT NULL,
+    src_word TEXT NOT NULL,
+    dst_word TEXT NOT NULL,
+    src_phrase TEXT NOT NULL,
+    dst_phrase TEXT NOT NULL,
+    PRIMARY KEY (src_lang, dst_lang, src_word, dst_word)
+);
+
 CREATE TABLE words_phrase (
     lang CHAR(2) NOT NULL,
     word_en_key TEXT NOT NULL,
@@ -9,9 +20,6 @@ CREATE TABLE words_phrase (
     phrase TEXT NOT NULL,
     PRIMARY KEY (lang, word_en_key, word)
 );
-
-
-
 
 CREATE TABLE words_phrase (
     src_lang CHAR(2) NOT NULL,

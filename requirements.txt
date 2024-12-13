@@ -8,3 +8,4 @@ konlpy
 googletrans
 deep_translator
 colorama
+pycountry

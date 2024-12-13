@@ -278,6 +278,27 @@ def process_word_phrase_prompt_result(db_conn, db_cur, src_lang, src_word, promp
   remove_disabled_word_from_db(db_conn, db_cur, src_lang, src_word)
   return word_phrase_list
 
+
+# OpenAI 2.0
+def openai_get_word_phrase(src_lang, src_word, target_lang):
+  system_prompt = "I give you a word in '', you must create phrase in " + src_lang + " language with it, and translate this phrase to " + target_lang + " language and also exclude word translation from this phrase, output should look like " + src_lang + ": {phrase in braces} and for each language one row lang:{phrase in braces}; {translated word in braces}"
+  messages = [
+    {"role": "system", "content": system_prompt},
+    {"role": "user", "content": src_word}
+  ]
+
+  # client = OpenAI()
+  
+  client = OpenAI(timeout=httpx.Timeout(15.0, read=5.0, write=10.0, connect=3.0))
+
+
+  completion = client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=messages,
+  )
+
+  return completion.choices[0].message.content
+
 # OpenAI
 def openai_get_phrases_and_words(src_lang, src_word, target_langs):
   system_prompt = "I give you a word in '', you must create phrase in " + src_lang + " language with it, and translate this phrase to each language [" + target_langs + "] and also translate word for each language, output should look like " + src_lang + ": {phrase in braces} and for each language one row lang:{phrase in braces}; {translated word in braces}"
@@ -370,6 +391,21 @@ def process_words(db_conn, db_cur, words, src_lang, langs):
       # exit(1)
 
 
+target_langs_to_translate_langs = {
+  'en': {'es', 'pt', 'fr', 'de', 'it', 'ru', 'zh', 'ja', 'ko', 'tr', 'ab'},
+  'es': {'en', 'pt', 'fr', 'it', 'ru', 'zh'},
+  'fr': {'en', 'es', 'pt', 'de', 'it', 'ru', 'zh', 'ja', 'ab'},
+  'de': {'en', 'es', 'pt', 'fr', 'it', 'ru', 'tr', 'ab'},
+  'ja': {'en', 'zh'},
+  'ko': {'en', 'zh', 'ja'},
+  'it': {'en', 'es', 'pt', 'fr', 'de', 'zh'},
+  'hi': {'en'},
+  'zh': {'en', 'ja'},
+  'pt': {'en', 'es', 'fr'},
+  'ru': {'en', 'es', 'tr'},
+  'ab': {'en'}
+}
+
 langs = ['en', 'es', 'it', 'pt', 'fr', 'de', 'ru', 'zh']
 
 words = file_to_text.read_text_file(input_file).lower().split('\n')
@@ -380,21 +416,6 @@ conn_params = {
   'user':'svocab_ai_translator',
   'password':'12345'
 }
-
-
-# def get_words_not_processed(db_cur):
-#   words_not_processed = []
-#   for src_lang in langs:
-#     if src_lang != 'en':
-#       continue
-#     for src_word in words:
-#       skip = is_all_langs_for_word_in_db(db_cur, langs, src_word, src_word if src_lang == 'en' else '')
-#       if skip:
-#         continue
-#       words_not_processed.append(src_word)
-#   return words_not_processed
-
-# import multiprocessing
 
 pool_len = 20
 
@@ -415,8 +436,6 @@ def process_words_th(conn_params, words, src_lang, langs):
       print("finished---")
   except ExceptionOpenAI as e:
     print(Back.RED + "open ai exception: ", "(", open_ai_error_counter, ")", e)
-    print(f"success count: {success_count}; error count: {error_count}")
-    print(f"success count: {success_count}; error count: {error_count}")
     print(f"success count: {success_count}; error count: {error_count}")
     os._exit(1)
 

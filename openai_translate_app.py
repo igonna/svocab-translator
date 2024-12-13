@@ -3,110 +3,53 @@ import sys
 from colorama import Back
 import os
 import json
-from openai import OpenAI
-import httpx
 import psycopg2
 import re
 import openai_utils
 import colorama
+import openai_translate_app_utils
 
 colorama.init(autoreset=True)
 
 arguments = sys.argv[1:]
 
+# get arguments && verify that valid paths
 if len(arguments) != 1:
-    print(Back.RED + "arguments count is not 1")
+    print(Back.RED + "give me path to your project root")
     exit(1)
 
-input_file = os.path.expanduser(arguments[0])
-phrases = json.loads(file_to_text.read_text_file(input_file))
-output_dir = os.path.dirname(os.path.expanduser(arguments[0]))
+path_to_root = arguments[0]
 
-# OpenAI
-def openai_get_phrase_translations(src_lang, src_phrase, target_langs):
-    input_phrase = '\'' + src_phrase + '\''
-    system_prompt = "I give you a phrase for application inside '' in " + src_lang + " language, you must translate this phrase as professional to [" + target_langs + "] and output should look like for each language one row lang:{phrase in braces}"
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": input_phrase}
-    ]
+l10n_exists = os.path.isdir(os.path.join(path_to_root, 'l10n'))
+lib_exists = os.path.isdir(os.path.join(path_to_root, 'lib'))
 
-    client = OpenAI(timeout=httpx.Timeout(15.0, read=5.0, write=10.0, connect=3.0))
+if not l10n_exists or not lib_exists:
+    print(Back.RED + "not valid path, root not contains l10n or lib directories")
+    exit(1)
 
-    completion = client.chat.completions.create(
-        model="gpt-4o",
-        messages=messages,
-    )
+language_codes_file = os.path.expanduser(path_to_root) + '/lib/main.dart'
+phrases_file = os.path.expanduser(path_to_root) + '/l10n/app_en.arb'
+output_dir = os.path.expanduser(path_to_root) + '/l10n'
 
-    return completion.choices[0].message.content
+# extract phrases && language codes && get special_phrases_variables
+phrases = {}
+try:
+    phrases = json.loads(file_to_text.read_text_file(phrases_file))
+except Exception as e:
+    print(f"Phrases parse error: {e}")
+    exit(1)
 
+language_codes = []
+try:
+    language_codes = openai_translate_app_utils.extract_language_codes_from_file(language_codes_file)
+except Exception as e:
+    print(f"Exctract language codes error: {e}")
+    exit(1)
+    
+special_phrases_variables = openai_translate_app_utils.extract_special_phrases_variables(phrases)
 
-src_lang = 'en'
-langs = ['en', 'es', 'it', 'pt', 'fr', 'de', 'ru', 'zh']
-
-target_langs_array = [lang for lang in langs if lang != src_lang]
-current_prompt_target_langs = ', '.join(target_langs_array)
-
-
-class PhraseData:
-    def __init__(self, src_lang, src_phrase, dst_lang, dst_phrase):
-        self.src_lang = src_lang
-        self.dst_lang = dst_lang
-        self.src_phrase = src_phrase
-        self.dst_phrase = dst_phrase
-
-def add_phrase_to_db(db_conn, db_cur, phrase_data: PhraseData):
-  sql = """
-    INSERT INTO app_phrases (src_lang, dst_lang, src_phrase, dst_phrase)
-    VALUES (%s, %s, %s, %s)
-    ON CONFLICT (src_lang, dst_lang, src_phrase) DO UPDATE
-    SET dst_phrase = EXCLUDED.dst_phrase
-  """
-  data = (phrase_data.src_lang, phrase_data.dst_lang, phrase_data.src_phrase, phrase_data.dst_phrase)
-  db_cur.execute(sql, data)
-  db_conn.commit()
-
-def get_phrase_from_db(db_cur, dst_lang, src_lang, src_phrase):
-  sql = """
-    SELECT src_lang, dst_lang, src_phrase, dst_phrase
-    FROM app_phrases
-    WHERE src_lang = %s AND dst_lang = %s AND src_phrase = %s
-    LIMIT 1
-  """
-
-  data = (src_lang, dst_lang, src_phrase)
-  db_cur.execute(sql, data)
-  row = db_cur.fetchone()
-
-  if row is None:
-    return None
-  
-  return (dst_lang, row[3])
-
-def get_all_phrases_from_db(db_cur, src_lang, langs, src_phrase):
-    result = []
-    for lang in langs:
-        result.append(get_phrase_from_db(db_cur, lang, src_lang, src_phrase))
-    return result
-
-
-def is_all_phrases_in_db(db_cur, langs, src_lang, src_phrase):
-    for lang in langs:
-        if get_phrase_from_db(db_cur, lang, src_lang, src_phrase) is None:
-            return False
-    return True
-
-def strip_non_alpha(s):
-    start = 0
-    while start < len(s) and not s[start].isalpha():
-        start += 1
-
-    end = len(s) - 1
-    while end >= 0 and not s[end].isalpha() and s[end] not in ['?', '.', '!']:
-        end -= 1
-
-    return s[start:end + 1]
-
+# translate all phrases
+src_lang_code = 'en'
 
 db_conn = psycopg2.connect(
   dbname="svocab_ai_translations",
@@ -116,72 +59,90 @@ db_conn = psycopg2.connect(
 
 db_cur = db_conn.cursor()
 
+src_phrases_count = len(phrases)
 
-def extract_after_colon(s):
-    colon_pos = s.find(':')
-    if colon_pos != -1:
-        return s[colon_pos + 1:].strip()
-    return s
-
-def get_data_from_prompt(prompt):
-    result = []
-    lines = prompt.split('\n')
-    
-    for line in lines:
-        lang_code = openai_utils.replace_line_lang_if_wrong(openai_utils.get_lang_code_from_line(line.lower()))
-        if lang_code is None:
-            continue
-        if len(lang_code) != 2:
-            continue
-        
-        phrase = strip_non_alpha(extract_after_colon(line))
-        if len(phrase) > 0:
-            result.append((lang_code, phrase))
-    return result
-
-
-result = {}
-
-for lang in langs:
-    if lang == src_lang:
+for dst_lang_code in language_codes:
+    if dst_lang_code == src_lang_code:
         continue
-    result[lang] = {}
 
-for phrase_key, phrase in phrases.items():
-    try:
-        print("\nsrc_phrase:", phrase)
-        add_phrase_to_db(db_conn, db_cur, PhraseData(src_lang, phrase, src_lang, phrase))
-        
-        lang_phrases = []
-        
-        if is_all_phrases_in_db(db_cur, langs, src_lang, phrase):
-            lang_phrases = get_all_phrases_from_db(db_cur, src_lang, target_langs_array, phrase)
-        else:
-            prompt_result = openai_get_phrase_translations(openai_utils.replace_lang_for_ai(src_lang), phrase, current_prompt_target_langs)
-            lang_phrases = get_data_from_prompt(prompt_result)
-            print(prompt_result)
-            
-            if len(lang_phrases) != len(target_langs_array):
-                print(Back.RED + "langs len not valid")
-                continue
-            
-            for lang_phrase in lang_phrases:
-                add_phrase_to_db(db_conn, db_cur, PhraseData(src_lang, phrase, lang_phrase[0], lang_phrase[1]))
-            
+    if dst_lang_code != 'ru':
+        continue
 
-        if len(lang_phrases) != len(target_langs_array):
-            print(Back.RED + "langs len not valid")
+    dst_lang_name = openai_translate_app_utils.get_language_name(dst_lang_code)
+
+    translated_phrase_count = 0
+    dst_phrases = {}
+    for phrase_key in phrases:
+        src_phrase = phrases[phrase_key]
+        phrase_info = openai_translate_app_utils.get_phrase_info(phrase_key, src_phrase, special_phrases_variables)
+
+        if not phrase_info.is_phrase_for_translation:
+            dst_phrases[phrase_key] = phrases[phrase_key]
             continue
-            
-        for lang_phrase in lang_phrases:
-            result[lang_phrase[0]][phrase_key] = lang_phrase[1].replace("'", "\'\'")
-            
-    except Exception as e:
-        print(Back.RED + "exception happened: ", e)
-        
 
-for lang, data in result.items():
-    print("Locale(\"" + lang + "\"),")
-    filename = f"app_{lang}.arb"
-    with open(output_dir + '/' + filename, 'w') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        phrase_translation_db = openai_translate_app_utils.get_phrase_from_db(db_cur, dst_lang_code, src_lang_code, src_phrase)
+        if phrase_translation_db is not None:
+            dst_phrases[phrase_key] = phrase_translation_db
+            translated_phrase_count += 1
+            break
+
+        # generation required
+        max_retry = 3
+        retry_count = 0
+        translated_phrase = ''
+        while(retry_count < max_retry):
+            prompt_result = ''
+            if phrase_info.phrase_type == openai_translate_app_utils.PhraseType.DEFAULT:
+                prompt_result = openai_translate_app_utils.openai_default_phrase_translation(src_phrase, dst_lang_name)
+            elif phrase_info.phrase_type == openai_translate_app_utils.PhraseType.VARIABLE:
+                prompt_result = openai_translate_app_utils.openai_variable_phrase_translation(src_phrase, dst_lang_name)
+            elif phrase_info.phrase_type == openai_translate_app_utils.PhraseType.PLURAL:
+                prompt_result = openai_translate_app_utils.openai_plural_phrase_translation(src_phrase, dst_lang_name)
+
+            translated_phrase = openai_translate_app_utils.extract_phrase_from_prompt(prompt_result)
+            
+            dst_phrase_info = openai_translate_app_utils.get_phrase_info(phrase_key, translated_phrase, special_phrases_variables)
+            
+            # verify that phrase valid
+            try:
+                if not openai_translate_app_utils.contains_double_quotes(prompt_result):
+                    raise Exception("prompt not contains double quotes")
+                
+                if phrase_info.phrase_variables != dst_phrase_info.phrase_variables:
+                    raise Exception("variables not the same")
+                
+                if phrase_info.phrase_type != dst_phrase_info.phrase_type:
+                    raise Exception("phrase type not the same")
+                
+                if phrase_info.start_non_alpha_symbol != dst_phrase_info.start_non_alpha_symbol:
+                    raise Exception("start not alpha symbol not the same")
+                
+                if phrase_info.end_non_alpha_symbol != dst_phrase_info.end_non_alpha_symbol:
+                    raise Exception("end not alpha symbol not the same")
+
+            except Exception as e:
+                print(Back.YELLOW + f"Retrying: {src_phrase}; prompt: {prompt_result} reason: {e}")
+                retry_count += 1
+                translated_phrase = ''
+
+        translation_valid = translated_phrase != ''
+        if translation_valid:
+            # add phrase to db
+            openai_translate_app_utils.add_phrase_to_db(
+                db_conn,
+                db_cur,
+                openai_translate_app_utils.PhraseData(src_lang_code, src_phrase, dst_lang_code, translated_phrase)
+            )
+
+            dst_phrases[phrase_key] = translated_phrase
+            print(Back.GREEN + f"dst_lang: {dst_lang_name}; phrase: {phrases[phrase_key]}; translation: {translated_phrase}")
+        else:
+            print(Back.RED + f"failed to translate src_phrase: {phrases[phrase_key]}")
+    
+    dst_phrases_count = len(dst_phrases)
+    if src_phrases_count != dst_phrases_count:
+        print(Back.RED + f"Not enough translations for {dst_lang_code}, {src_phrases_count}/{dst_phrases_count}")
+    else:
+        filename = f"app_{dst_lang_code}.arb"
+        with open(output_dir + '/' + filename, 'w') as f:
+            json.dump(dst_phrases, f, ensure_ascii=False, indent=2)
