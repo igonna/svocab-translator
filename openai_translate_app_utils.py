@@ -73,21 +73,21 @@ class PhraseInfo:
     phrase_variables: List[str] = field(default_factory=list)
 
 def get_phrase_info(phrase_key: str, phrase: str, special_phrases_variables) -> PhraseInfo:
+    phrase_variables = []
     if phrase_key[0] == '@':
-        return PhraseInfo(is_phrase_for_translation=False)
+        return PhraseInfo(is_phrase_for_translation=False, phrase_variables=phrase_variables)
 
     phrase_type = get_phrase_type(phrase)
 
-    phrase_variables = field(default_factory=list)
     if (phrase_type == PhraseType.VARIABLE or phrase_type == PhraseType.PLURAL) and phrase_key in special_phrases_variables:
         phrase_variables = special_phrases_variables[phrase_key]
 
     start_non_alpha_symbol = ''
-    if not phrase[0].isalpha():
+    if len(phrase) > 0 and not phrase[0].isalpha():
         start_non_alpha_symbol = phrase[0]
 
     end_non_alpha_symbol = ''
-    if not phrase[-1].isalpha():
+    if len(phrase) > 0 and not phrase[-1].isalpha():
         end_non_alpha_symbol = phrase[-1]
 
     return PhraseInfo(
@@ -151,21 +151,24 @@ def openai_prompt_exec(prompt):
     return completion.choices[0].message.content
 
 def openai_default_phrase_translation(src_phrase, dst_lang):
-    prompt = 'This is flutter app phrase "' + src_phrase + '" translate it to ' + dst_lang + ' output only as "translated phrase"'
+    prompt = 'This is flutter app phrase "' + src_phrase + '" translate it to ' + dst_lang + ' output only translated phrase inside double quotes'
     return openai_prompt_exec(prompt)
 
 def openai_variable_phrase_translation(src_phrase, dst_lang):
-    prompt = 'This is flutter app phrase with variables "' + src_phrase + '" translate it to ' + dst_lang + ' with all variables remain the same, output only as "translated phrase"'
+    prompt = 'This is flutter app phrase with variables "' + src_phrase + '" translate it to ' + dst_lang + ' with all variables remain the same, output only translated phrase inside double quotes'
     return openai_prompt_exec(prompt)
 
 def openai_plural_phrase_translation(src_phrase, dst_lang):
-    prompt = 'This is flutter app phrase which uses pluralization "' + src_phrase + '" translate it to ' + dst_lang + '  with all variables remain the same, output only as "translated phrase"'
+    prompt = 'This is flutter app phrase which uses pluralization "' + src_phrase + '" translate it to ' + dst_lang + '  with all variables remain the same, output only translated phrase inside double quotes'
     return openai_prompt_exec(prompt)
 
 
 # prompt extraction
 def extract_phrase_from_prompt(prompt):
-    return re.findall(r'"(.*?)"', prompt)
+    match = re.search(r'"(.*?)"', prompt)
+    if match:
+        return match.group(1)
+    return ""
 
 def contains_double_quotes(text):
     return '"' in text

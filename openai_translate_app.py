@@ -84,13 +84,13 @@ for dst_lang_code in language_codes:
         if phrase_translation_db is not None:
             dst_phrases[phrase_key] = phrase_translation_db
             translated_phrase_count += 1
-            break
+            continue
 
         # generation required
         max_retry = 3
         retry_count = 0
         translated_phrase = ''
-        while(retry_count < max_retry):
+        while(retry_count < max_retry and translated_phrase == ''):
             prompt_result = ''
             if phrase_info.phrase_type == openai_translate_app_utils.PhraseType.DEFAULT:
                 prompt_result = openai_translate_app_utils.openai_default_phrase_translation(src_phrase, dst_lang_name)
@@ -100,25 +100,25 @@ for dst_lang_code in language_codes:
                 prompt_result = openai_translate_app_utils.openai_plural_phrase_translation(src_phrase, dst_lang_name)
 
             translated_phrase = openai_translate_app_utils.extract_phrase_from_prompt(prompt_result)
+
+            print(f"prompt result: {translated_phrase}")
             
             dst_phrase_info = openai_translate_app_utils.get_phrase_info(phrase_key, translated_phrase, special_phrases_variables)
             
+            # correct phrase
+            if phrase_info.start_non_alpha_symbol != dst_phrase_info.start_non_alpha_symbol:
+                translated_phrase = phrase_info.start_non_alpha_symbol + translated_phrase
+
+            if phrase_info.end_non_alpha_symbol != dst_phrase_info.end_non_alpha_symbol:
+                translated_phrase = translated_phrase + phrase_info.start_non_alpha_symbol
+
             # verify that phrase valid
             try:
-                if not openai_translate_app_utils.contains_double_quotes(prompt_result):
-                    raise Exception("prompt not contains double quotes")
-                
                 if phrase_info.phrase_variables != dst_phrase_info.phrase_variables:
                     raise Exception("variables not the same")
-                
+
                 if phrase_info.phrase_type != dst_phrase_info.phrase_type:
                     raise Exception("phrase type not the same")
-                
-                if phrase_info.start_non_alpha_symbol != dst_phrase_info.start_non_alpha_symbol:
-                    raise Exception("start not alpha symbol not the same")
-                
-                if phrase_info.end_non_alpha_symbol != dst_phrase_info.end_non_alpha_symbol:
-                    raise Exception("end not alpha symbol not the same")
 
             except Exception as e:
                 print(Back.YELLOW + f"Retrying: {src_phrase}; prompt: {prompt_result} reason: {e}")
