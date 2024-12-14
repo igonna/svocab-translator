@@ -4,8 +4,6 @@ from colorama import Back
 import os
 import json
 import psycopg2
-import re
-import openai_utils
 import colorama
 import openai_translate_app_utils
 
@@ -87,9 +85,11 @@ for dst_lang_code in language_codes:
             continue
 
         # generation required
-        max_retry = 3
+        max_retry = 4
         retry_count = 0
+        max_lang_errors = 2
         translated_phrase = ''
+        was_not_valid_lang_error = False
         while(retry_count < max_retry and translated_phrase == ''):
             prompt_result = ''
             if phrase_info.phrase_type == openai_translate_app_utils.PhraseType.DEFAULT:
@@ -99,18 +99,12 @@ for dst_lang_code in language_codes:
             elif phrase_info.phrase_type == openai_translate_app_utils.PhraseType.PLURAL:
                 prompt_result = openai_translate_app_utils.openai_plural_phrase_translation(src_phrase, dst_lang_name)
 
+            print(f"prompt result: {prompt_result}")
             translated_phrase = openai_translate_app_utils.extract_phrase_from_prompt(prompt_result)
-
-            print(f"prompt result: {translated_phrase}")
-            
+            print(f"translated phrase: {translated_phrase}")
+            translated_phrase = openai_translate_app_utils.make_dst_phrase_look_the_same(src_phrase, translated_phrase)
+            translated_phrase = openai_translate_app_utils.double_single_quotes(translated_phrase)
             dst_phrase_info = openai_translate_app_utils.get_phrase_info(phrase_key, translated_phrase, special_phrases_variables)
-            
-            # correct phrase
-            if phrase_info.start_non_alpha_symbol != dst_phrase_info.start_non_alpha_symbol:
-                translated_phrase = phrase_info.start_non_alpha_symbol + translated_phrase
-
-            if phrase_info.end_non_alpha_symbol != dst_phrase_info.end_non_alpha_symbol:
-                translated_phrase = translated_phrase + phrase_info.start_non_alpha_symbol
 
             # verify that phrase valid
             try:
@@ -120,8 +114,39 @@ for dst_lang_code in language_codes:
                 if phrase_info.phrase_type != dst_phrase_info.phrase_type:
                     raise Exception("phrase type not the same")
 
+                if phrase_info.phrase_type == openai_translate_app_utils.PhraseType.DEFAULT:
+                    if retry_count > 1 and was_not_valid_lang_error:
+                        pass
+                    else:
+                        phrase_of_lang = openai_translate_app_utils.openai_default_phrase_is_of_lang(src_phrase, translated_phrase, dst_lang_name)
+                        if not phrase_of_lang:
+                            was_not_valid_lang_error = True
+                            raise Exception("phrase lang not valid")
+                elif phrase_info.phrase_type == openai_translate_app_utils.PhraseType.PLURAL:
+                    if retry_count > 1 and was_not_valid_lang_error:
+                        pass
+                    else:
+                        phrase_of_lang = openai_translate_app_utils.openai_plural_phrase_is_of_lang(src_phrase, translated_phrase, dst_lang_name)
+                        if not phrase_of_lang:
+                            was_not_valid_lang_error = True
+                            raise Exception("phrase lang not valid")
+
+                    if not openai_translate_app_utils.is_plural_phrase_valid(translated_phrase, phrase_info.phrase_variables):
+                        raise Exception("plural phrase not valid")
+                elif phrase_info.phrase_type == openai_translate_app_utils.PhraseType.VARIABLE:
+                    if retry_count > 1 and was_not_valid_lang_error:
+                        pass
+                    else:
+                        phrase_of_lang = openai_translate_app_utils.openai_variable_phrase_is_of_lang(src_phrase, translated_phrase, dst_lang_name)
+                        if not phrase_of_lang:
+                            was_not_valid_lang_error = True
+                            raise Exception("phrase lang not valid")
+
+                    if not openai_translate_app_utils.is_variable_phrase_valid(translated_phrase, phrase_info.phrase_variables):
+                        raise Exception("variable phrase not valid")
+
             except Exception as e:
-                print(Back.YELLOW + f"Retrying: {src_phrase}; prompt: {prompt_result} reason: {e}")
+                print(Back.YELLOW + f"Retrying: \n\tsrc_phrase: {src_phrase};\n\tdst_phrase: {translated_phrase};\n\treason: {e};\n\tprompt: {prompt_result};")
                 retry_count += 1
                 translated_phrase = ''
 
@@ -135,13 +160,13 @@ for dst_lang_code in language_codes:
             )
 
             dst_phrases[phrase_key] = translated_phrase
-            print(Back.GREEN + f"dst_lang: {dst_lang_name}; phrase: {phrases[phrase_key]}; translation: {translated_phrase}")
+            print(Back.GREEN + f"Done: \n\tsrc_phrase: {src_phrase};\n\tdst_phrase: {translated_phrase};\n\tprompt: {prompt_result};")
         else:
             print(Back.RED + f"failed to translate src_phrase: {phrases[phrase_key]}")
     
     dst_phrases_count = len(dst_phrases)
     if src_phrases_count != dst_phrases_count:
-        print(Back.RED + f"Not enough translations for {dst_lang_code}, {src_phrases_count}/{dst_phrases_count}")
+        print(Back.RED + f"Not enough translations for {dst_lang_code}, {dst_phrases_count}/{src_phrases_count}")
     else:
         filename = f"app_{dst_lang_code}.arb"
         with open(output_dir + '/' + filename, 'w') as f:

@@ -6,6 +6,9 @@ from dataclasses import dataclass, field
 from typing import List
 from openai import OpenAI
 import httpx
+from langdetect import detect
+from langdetect import detect_langs
+import json
 
 
 def extract_language_codes_from_file(file_path):
@@ -150,25 +153,98 @@ def openai_prompt_exec(prompt):
 
     return completion.choices[0].message.content
 
+
 def openai_default_phrase_translation(src_phrase, dst_lang):
-    prompt = 'This is flutter app phrase "' + src_phrase + '" translate it to ' + dst_lang + ' output only translated phrase inside double quotes'
+    prompt = 'translate this English android app phrase "' + src_phrase + '" in formal way to ' + dst_lang + ', output this only as json {"translated_phrase": ""}'
     return openai_prompt_exec(prompt)
+
+def openai_default_phrase_is_of_lang(src_phrase, dst_phrase, dst_lang_name):
+    prompt = 'is ' + dst_lang_name + ' ' + dst_phrase + ' a possible translation for English ' + src_phrase + ', output only yes or no'
+    result = openai_prompt_exec(prompt)
+    return 'yes' in result.lower()
+
 
 def openai_variable_phrase_translation(src_phrase, dst_lang):
-    prompt = 'This is flutter app phrase with variables "' + src_phrase + '" translate it to ' + dst_lang + ' with all variables remain the same, output only translated phrase inside double quotes'
+    prompt = 'translate this English flutter app phrase with variables "' + src_phrase + '" in formal way to ' + dst_lang + ' with all variables remain the same, output this only as json {"translated_phrase": ""}'
     return openai_prompt_exec(prompt)
 
+def openai_variable_phrase_is_of_lang(src_phrase, dst_phrase, dst_lang_name):
+    prompt = 'is ' + dst_lang_name + ' "' + dst_phrase + '" a possible translation for English "' + src_phrase + '" with flutter variables, output only yes or no'
+    result = openai_prompt_exec(prompt)
+    return 'yes' in result.lower()
+
+
 def openai_plural_phrase_translation(src_phrase, dst_lang):
-    prompt = 'This is flutter app phrase which uses pluralization "' + src_phrase + '" translate it to ' + dst_lang + '  with all variables remain the same, output only translated phrase inside double quotes'
+    prompt = 'translate this English flutter app phrase with pluralization "' + src_phrase + '" in formal way to ' + dst_lang + ' with all variables remain the same, output this only as json {"translated_phrase": ""}'
     return openai_prompt_exec(prompt)
+
+def openai_plural_phrase_is_of_lang(src_phrase, dst_phrase, dst_lang_name):
+    prompt = 'is ' + dst_lang_name + ' "' + dst_phrase + '" a possible translation for English "' + src_phrase + '" with flutter pluralization variables, output only yes or no'
+    result = openai_prompt_exec(prompt)
+    return 'yes' in result.lower()
 
 
 # prompt extraction
 def extract_phrase_from_prompt(prompt):
-    match = re.search(r'"(.*?)"', prompt)
-    if match:
-        return match.group(1)
-    return ""
+    try:
+        clean_prompt = prompt.strip("```json ").strip("```")
+        json_object = json.loads(clean_prompt)
+        extracted_phrase = json_object.get("translated_phrase", "")
+        
+        if "translated_phrase" in extracted_phrase or "translated phrase" in extracted_phrase:
+            return ""
 
-def contains_double_quotes(text):
-    return '"' in text
+        return extracted_phrase
+    except:
+        return ""
+
+def remove_periods_from_end(s):
+    while s and s[-1] == '.':
+        s = s[:-1]
+    return s
+
+def is_phrase_contains_braces(phrase: str):
+    return phrase.count('{') > 0 and phrase.count('}') > 0
+
+def is_phrase_braces_valid(phrase: str):
+    if not is_phrase_contains_braces(phrase):
+        return False
+
+    return phrase.count('{') == phrase.count('}')
+
+def is_plural_phrase_valid(phrase: str, variables):
+    if not is_phrase_braces_valid(phrase):
+        return False
+
+    if 'plural' not in phrase:
+        return False
+    
+    for variable in variables:
+        if variable not in phrase:
+            return False
+
+    return True
+
+def is_variable_phrase_valid(phrase: str, variables):
+    if not is_phrase_braces_valid(phrase):
+        return False
+    
+    for variable in variables:
+        if variable not in phrase:
+            return False
+
+    return True
+
+def double_single_quotes(phrase: str):
+    return phrase.replace("'", "''")
+
+def make_dst_phrase_look_the_same(src_phrase: str, dst_phrase: str):
+    if src_phrase[0].isupper():
+        dst_phrase = dst_phrase.capitalize()
+
+    if src_phrase[-1] != '.':
+        dst_phrase = remove_periods_from_end(dst_phrase)
+
+    if src_phrase[-1] == ' ' and dst_phrase[-1] != ' ':
+        dst_phrase += ' '
+    return dst_phrase
