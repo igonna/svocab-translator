@@ -9,6 +9,7 @@ import httpx
 from langdetect import detect
 from langdetect import detect_langs
 import json
+import http.client
 
 
 def extract_language_codes_from_file(file_path):
@@ -248,3 +249,27 @@ def make_dst_phrase_look_the_same(src_phrase: str, dst_phrase: str):
     if src_phrase[-1] == ' ' and dst_phrase[-1] != ' ':
         dst_phrase += ' '
     return dst_phrase
+
+def get_phrase_without_variables_and_plural(phrase, variables):
+    words_to_remove = ['plural', 'other']
+    words_to_remove = words_to_remove + variables
+    for word_to_remove in words_to_remove:
+        phrase = phrase.replace(word_to_remove,'')
+    return phrase
+
+
+def local_server_is_phrase_language_valid(phrase, phrase_info, lang_code):
+    phrase_without_variables = get_phrase_without_variables_and_plural(phrase, phrase_info.variables)
+    
+    conn = http.client.HTTPConnection("localhost", 48499)
+    headers = {'langCode': lang_code}
+    data = phrase_without_variables.encode('utf-8')
+    conn.request("POST", "/is_valid_phrase_langauge", body=data, headers=headers)
+
+    response = conn.getresponse()
+    
+    if response.status not in (200, 422):
+        raise Exception(f"something went wrong when calling local server, code: {response.status}")
+
+    conn.close()
+    return response.status == 200
