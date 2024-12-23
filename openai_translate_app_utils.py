@@ -124,7 +124,7 @@ def add_phrase_to_db(db_conn, db_cur, phrase_data: PhraseData):
 
 def get_phrase_from_db(db_cur, dst_lang, src_lang, src_phrase):
   sql = """
-    SELECT src_phrase
+    SELECT dst_phrase
     FROM app_phrases
     WHERE src_lang = %s AND dst_lang = %s AND src_phrase = %s
     LIMIT 1
