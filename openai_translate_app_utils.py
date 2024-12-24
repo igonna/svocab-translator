@@ -44,16 +44,43 @@ def get_language_name(language_code):
         return language_code
 
 
+not_translation_names = ['Google', 'YouTube']
+
 class PhraseType(Enum):
     DEFAULT = "default"
     PLURAL = "plural"
     VARIABLE = "variable"
+    NOT_TRANSLATION_NAME = "not_translation_name"
+
+def is_phrase_contains_not_translation_name(phrase: str):
+    result = False
+    for name in not_translation_names:
+        if name.lower() in phrase.lower():
+            result = True
+            break
+    return result
+
+def get_phrase_not_translation_names(phrase: str):
+    phrase_not_translation_names = []
+    for name in not_translation_names:
+        if name.lower() in phrase.lower():
+            phrase_not_translation_names.append(name)
+    return phrase_not_translation_names
+
+def get_phrase_without_not_translation_names(phrase: str):
+    result_phrase = phrase.lower()
+    for name in not_translation_names:
+        if name.lower() in result_phrase:
+            result_phrase = result_phrase.replace(name.lower(), '')
+    return result_phrase
 
 def get_phrase_type(phrase):
     if re.search(r'\bplural\b', phrase) and re.search(r'[{}]', phrase):
         return PhraseType.PLURAL
     elif not re.search(r'\bplural\b', phrase) and re.search(r'[{}]', phrase):
         return PhraseType.VARIABLE
+    elif is_phrase_contains_not_translation_name(phrase):
+        return PhraseType.NOT_TRANSLATION_NAME
     else:
         return PhraseType.DEFAULT
 
@@ -75,16 +102,21 @@ class PhraseInfo:
     start_non_alpha_symbol: str = ''
     end_non_alpha_symbol: str = ''
     phrase_variables: List[str] = field(default_factory=list)
+    phrase_not_translation_names: List[str] = field(default_factory=list)
 
 def get_phrase_info(phrase_key: str, phrase: str, special_phrases_variables) -> PhraseInfo:
     phrase_variables = []
+    phrase_not_translation_names = []
     if phrase_key[0] == '@':
-        return PhraseInfo(is_phrase_for_translation=False, phrase_variables=phrase_variables)
+        return PhraseInfo(is_phrase_for_translation=False, phrase_variables=phrase_variables, phrase_not_translation_names=phrase_not_translation_names)
 
     phrase_type = get_phrase_type(phrase)
 
     if (phrase_type == PhraseType.VARIABLE or phrase_type == PhraseType.PLURAL) and phrase_key in special_phrases_variables:
         phrase_variables = special_phrases_variables[phrase_key]
+        
+    if phrase_type == PhraseType.NOT_TRANSLATION_NAME:
+        phrase_not_translation_names = get_phrase_not_translation_names(phrase)
 
     start_non_alpha_symbol = ''
     if len(phrase) > 0 and not phrase[0].isalpha():
@@ -98,7 +130,8 @@ def get_phrase_info(phrase_key: str, phrase: str, special_phrases_variables) -> 
         phrase_type=phrase_type,
         start_non_alpha_symbol=start_non_alpha_symbol,
         end_non_alpha_symbol=end_non_alpha_symbol,
-        phrase_variables=phrase_variables
+        phrase_variables=phrase_variables,
+        phrase_not_translation_names=phrase_not_translation_names
     )
     
 
@@ -138,6 +171,20 @@ def get_phrase_from_db(db_cur, dst_lang, src_lang, src_phrase):
     return None
 
   return row[0]
+
+
+def list_to_string(l):
+    result = ''
+    count = 0
+    
+    for i in l:
+        if count > 0:
+            result += ', '
+        result += i
+        count += 1
+    
+    return result
+
 
 # OpenAI phrase translation
 def openai_prompt_exec(prompt):
@@ -185,6 +232,21 @@ def openai_plural_phrase_is_of_lang(src_phrase, dst_phrase, dst_lang_name):
     return 'yes' in result.lower()
 
 
+def is_entire_phrase_not_translation(phrase: str):
+    result = False
+    for name in not_translation_names:
+        if phrase.lower() == name.lower():
+            return True
+    return result
+
+def openai_not_translation_name_phrase_translation(src_phrase, phrase_info: PhraseInfo, dst_lang_name):
+    if (is_entire_phrase_not_translation(src_phrase)):
+        return json.dumps({"translated_phrase": src_phrase})
+
+    what_to_not_translate = list_to_string(phrase_info.phrase_not_translation_names)
+    prompt = 'translate this English android app phrase "' + src_phrase + '" in formal way to ' + dst_lang_name + ' but do not translate ' + what_to_not_translate + ', output this only as json {"translated_phrase": ""}'
+    return openai_prompt_exec(prompt)
+
 # prompt extraction
 def extract_phrase_from_prompt(prompt):
     try:
@@ -226,6 +288,15 @@ def is_plural_phrase_valid(phrase: str, variables):
 
     return True
 
+def is_not_translation_phrase_valid(translated_phrase, phrase_info: PhraseInfo):
+    result = True
+    
+    for name in phrase_info.phrase_not_translation_names:
+        if name.lower() not in translated_phrase.lower():
+            return False
+
+    return result
+
 def is_variable_phrase_valid(phrase: str, variables):
     if not is_phrase_braces_valid(phrase):
         return False
@@ -250,6 +321,13 @@ def make_dst_phrase_look_the_same(src_phrase: str, dst_phrase: str):
         dst_phrase += ' '
     return dst_phrase
 
+
+def make_dst_not_translation_names_phrase_look_the_same(translated_phrase: str, phrase_info: PhraseInfo):
+    for name in phrase_info.phrase_not_translation_names:
+        translated_phrase = re.sub(re.escape(name), name, translated_phrase, flags=re.IGNORECASE)
+    return translated_phrase
+
+
 def get_phrase_without_variables_and_plural(phrase, variables):
     words_to_remove = ['plural', 'other']
     words_to_remove = words_to_remove + variables
@@ -258,9 +336,12 @@ def get_phrase_without_variables_and_plural(phrase, variables):
     return phrase
 
 
-def local_server_is_phrase_language_valid(phrase, phrase_info, lang_code):
-    phrase_without_variables = get_phrase_without_variables_and_plural(phrase, phrase_info.variables)
-    
+def local_server_is_phrase_language_valid(phrase, phrase_info: PhraseInfo, lang_code):
+    phrase_without_variables = get_phrase_without_variables_and_plural(phrase, phrase_info.phrase_variables)
+
+    if phrase_info.phrase_type == PhraseType.NOT_TRANSLATION_NAME:
+        phrase_without_variables = get_phrase_without_not_translation_names(phrase_without_variables)
+
     conn = http.client.HTTPConnection("localhost", 48499)
     headers = {'langCode': lang_code}
     data = phrase_without_variables.encode('utf-8')

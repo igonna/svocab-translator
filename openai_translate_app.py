@@ -99,24 +99,34 @@ for dst_lang_code in language_codes:
                 prompt_result = openai_translate_app_utils.openai_variable_phrase_translation(src_phrase, dst_lang_name)
             elif phrase_info.phrase_type == openai_translate_app_utils.PhraseType.PLURAL:
                 prompt_result = openai_translate_app_utils.openai_plural_phrase_translation(src_phrase, dst_lang_name)
+            elif phrase_info.phrase_type == openai_translate_app_utils.PhraseType.NOT_TRANSLATION_NAME:
+                prompt_result = openai_translate_app_utils.openai_not_translation_name_phrase_translation(src_phrase, phrase_info, dst_lang_name)
 
             print(f"prompt result: {prompt_result}")
             translated_phrase = openai_translate_app_utils.extract_phrase_from_prompt(prompt_result)
             print(f"translated phrase: {translated_phrase}")
-            translated_phrase = openai_translate_app_utils.make_dst_phrase_look_the_same(src_phrase, translated_phrase)
+            translated_phrase = openai_translate_app_utils.make_dst_phrase_look_the_same(src_phrase, translated_phrase)            
             translated_phrase = openai_translate_app_utils.double_single_quotes(translated_phrase)
             dst_phrase_info = openai_translate_app_utils.get_phrase_info(phrase_key, translated_phrase, special_phrases_variables)
+            
+            if phrase_info.phrase_type == openai_translate_app_utils.PhraseType.NOT_TRANSLATION_NAME:
+                translated_phrase = openai_translate_app_utils.make_dst_not_translation_names_phrase_look_the_same(translated_phrase, phrase_info)
 
             # verify that phrase valid
             try:
-                if not openai_translate_app_utils.local_server_is_phrase_language_valid(translated_phrase, phrase_info, dst_lang_code):
+                if phrase_info.phrase_type == openai_translate_app_utils.PhraseType.NOT_TRANSLATION_NAME:
+                    if openai_translate_app_utils.is_entire_phrase_not_translation(src_phrase):
+                        pass
+                    elif not openai_translate_app_utils.local_server_is_phrase_language_valid(translated_phrase, phrase_info, dst_lang_code):
+                        raise Exception("translated phrase language not valid")
+                elif not openai_translate_app_utils.local_server_is_phrase_language_valid(translated_phrase, phrase_info, dst_lang_code):
                     raise Exception("translated phrase language not valid")
 
                 if phrase_info.phrase_variables != dst_phrase_info.phrase_variables:
                     raise Exception("variables not the same")
 
                 if phrase_info.phrase_type != dst_phrase_info.phrase_type:
-                    raise Exception("phrase type not the same")
+                    raise Exception(f"phrase type not the same {phrase_info.phrase_type} to {dst_phrase_info.phrase_type}")
 
                 if phrase_info.phrase_type == openai_translate_app_utils.PhraseType.DEFAULT:
                     if retry_count > 1 and was_not_valid_lang_error:
@@ -125,7 +135,18 @@ for dst_lang_code in language_codes:
                         phrase_of_lang = openai_translate_app_utils.openai_default_phrase_is_of_lang(src_phrase, translated_phrase, dst_lang_name)
                         if not phrase_of_lang:
                             was_not_valid_lang_error = True
+                            raise Exception("openai phrase lang not valid")  
+                elif phrase_info.phrase_type == openai_translate_app_utils.PhraseType.NOT_TRANSLATION_NAME:
+                    if retry_count > 1 and was_not_valid_lang_error or openai_translate_app_utils.is_entire_phrase_not_translation(src_phrase):
+                        pass
+                    else:
+                        phrase_of_lang = openai_translate_app_utils.openai_default_phrase_is_of_lang(src_phrase, translated_phrase, dst_lang_name)
+                        if not phrase_of_lang:
+                            was_not_valid_lang_error = True
                             raise Exception("openai phrase lang not valid")
+
+                    if not openai_translate_app_utils.is_not_translation_phrase_valid(translated_phrase, phrase_info):
+                        raise Exception("not translation phrase not valid")
                 elif phrase_info.phrase_type == openai_translate_app_utils.PhraseType.PLURAL:
                     if retry_count > 1 and was_not_valid_lang_error:
                         pass
