@@ -6,6 +6,7 @@ import json
 import psycopg2
 import colorama
 import openai_translate_app_utils
+import concurrent.futures
 
 colorama.init(autoreset=True)
 
@@ -49,23 +50,16 @@ special_phrases_variables = openai_translate_app_utils.extract_special_phrases_v
 # translate all phrases
 src_lang_code = 'en'
 
-db_conn = psycopg2.connect(
-  dbname="svocab_ai_translations",
-  user="svocab_ai_translator",
-  password="12345",
-)
-
-db_cur = db_conn.cursor()
-
 src_phrases_count = len(phrases)
 
-for dst_lang_code in language_codes:
-    if dst_lang_code == src_lang_code:
-        continue
+problematic_langs_count = {}
+def increase_problematic_lang_count(lang_code):
+    if lang_code in problematic_langs_count:
+        problematic_langs_count[lang_code] += 1
+    else:
+        problematic_langs_count[lang_code] = 1
 
-    if dst_lang_code != 'ru':
-        continue
-
+def create_language_file(dst_lang_code, db_conn, db_cur):
     dst_lang_name = openai_translate_app_utils.get_language_name(dst_lang_code)
 
     translated_phrase_count = 0
@@ -107,10 +101,11 @@ for dst_lang_code in language_codes:
             print(f"translated phrase: {translated_phrase}")
             translated_phrase = openai_translate_app_utils.make_dst_phrase_look_the_same(src_phrase, translated_phrase)            
             translated_phrase = openai_translate_app_utils.double_single_quotes(translated_phrase)
-            dst_phrase_info = openai_translate_app_utils.get_phrase_info(phrase_key, translated_phrase, special_phrases_variables)
             
             if phrase_info.phrase_type == openai_translate_app_utils.PhraseType.NOT_TRANSLATION_NAME:
                 translated_phrase = openai_translate_app_utils.make_dst_not_translation_names_phrase_look_the_same(translated_phrase, phrase_info)
+
+            dst_phrase_info = openai_translate_app_utils.get_phrase_info(phrase_key, translated_phrase, special_phrases_variables)
 
             # verify that phrase valid
             try:
@@ -118,8 +113,12 @@ for dst_lang_code in language_codes:
                     if openai_translate_app_utils.is_entire_phrase_not_translation(src_phrase):
                         pass
                     elif not openai_translate_app_utils.local_server_is_phrase_language_valid(translated_phrase, phrase_info, dst_lang_code):
+                        increase_problematic_lang_count(dst_lang_code)
+                        print(problematic_langs_count)
                         raise Exception("translated phrase language not valid")
                 elif not openai_translate_app_utils.local_server_is_phrase_language_valid(translated_phrase, phrase_info, dst_lang_code):
+                    increase_problematic_lang_count(dst_lang_code)
+                    print(problematic_langs_count)
                     raise Exception("translated phrase language not valid")
 
                 if phrase_info.phrase_variables != dst_phrase_info.phrase_variables:
@@ -171,7 +170,7 @@ for dst_lang_code in language_codes:
                         raise Exception("variable phrase not valid")
 
             except Exception as e:
-                print(Back.YELLOW + f"Retrying: \n\tsrc_phrase: {src_phrase};\n\tdst_phrase: {translated_phrase};\n\treason: {e};\n\tprompt: {prompt_result};")
+                print(Back.YELLOW + f"Retrying: \n\tsrc_phrase ({src_lang_code}): {src_phrase};\n\tdst_phrase ({dst_lang_code}): {translated_phrase};\n\treason: {e};\n\tprompt: {prompt_result};")
                 retry_count += 1
                 translated_phrase = ''
 
@@ -185,7 +184,7 @@ for dst_lang_code in language_codes:
             )
 
             dst_phrases[phrase_key] = translated_phrase
-            print(Back.GREEN + f"Done: \n\tsrc_phrase: {src_phrase};\n\tdst_phrase: {translated_phrase};\n\tprompt: {prompt_result};")
+            print(Back.GREEN + f"Done: \n\tsrc_phrase ({src_lang_code}): {src_phrase};\n\tdst_phrase ({dst_lang_code}): {translated_phrase};\n\tprompt: {prompt_result};")
         else:
             print(Back.RED + f"failed to translate src_phrase: {phrases[phrase_key]}")
     
@@ -196,3 +195,29 @@ for dst_lang_code in language_codes:
         filename = f"app_{dst_lang_code}.arb"
         with open(output_dir + '/' + filename, 'w') as f:
             json.dump(dst_phrases, f, ensure_ascii=False, indent=2)
+
+
+def process_language_code(dst_lang_code):
+    if dst_lang_code == src_lang_code:
+        return
+    
+    db_conn = psycopg2.connect(
+        dbname="svocab_ai_translations",
+        user="svocab_ai_translator",
+        password="12345",
+    )
+
+    db_cur = db_conn.cursor()
+
+    create_language_file(dst_lang_code, db_conn, db_cur)
+
+
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    futures = {executor.submit(process_language_code, code) for code in language_codes}
+
+    for future in concurrent.futures.as_completed(futures):
+        try:
+            future.result()
+        except Exception as e:
+            if "no results to fetch" not in e:
+                print(Back.RED + f"Error processing language code: {e}")

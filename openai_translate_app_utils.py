@@ -44,7 +44,7 @@ def get_language_name(language_code):
         return language_code
 
 
-not_translation_names = ['Google', 'YouTube']
+not_translation_names = ['Google', 'YouTube', 'Google Play']
 
 class PhraseType(Enum):
     DEFAULT = "default"
@@ -70,8 +70,10 @@ def get_phrase_not_translation_names(phrase: str):
 def get_phrase_without_not_translation_names(phrase: str):
     result_phrase = phrase.lower()
     for name in not_translation_names:
-        if name.lower() in result_phrase:
-            result_phrase = result_phrase.replace(name.lower(), '')
+        name_parts = name.lower().split(' ')
+        for name_part in name_parts:
+            if name_part in result_phrase:
+                result_phrase = result_phrase.replace(name_part, '')
     return result_phrase
 
 def get_phrase_type(phrase):
@@ -144,33 +146,34 @@ class PhraseData:
         self.dst_phrase = dst_phrase
 
 def add_phrase_to_db(db_conn, db_cur, phrase_data: PhraseData):
-  sql = """
-    INSERT INTO app_phrases (src_lang, dst_lang, src_phrase, dst_phrase)
-    VALUES (%s, %s, %s, %s)
-    ON CONFLICT (src_lang, dst_lang, src_phrase) DO UPDATE
-    SET dst_phrase = EXCLUDED.dst_phrase
-  """
-  data = (phrase_data.src_lang, phrase_data.dst_lang, phrase_data.src_phrase, phrase_data.dst_phrase)
-  db_cur.execute(sql, data)
-  db_conn.commit()
+    sql = """
+        INSERT INTO app_phrases (src_lang, dst_lang, src_phrase, dst_phrase)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (src_lang, dst_lang, src_phrase) DO UPDATE
+        SET dst_phrase = EXCLUDED.dst_phrase
+    """
+    data = (phrase_data.src_lang, phrase_data.dst_lang, phrase_data.src_phrase, phrase_data.dst_phrase)
+    db_cur.execute(sql, data)
+    db_conn.commit()
 
 
 def get_phrase_from_db(db_cur, dst_lang, src_lang, src_phrase):
-  sql = """
-    SELECT dst_phrase
-    FROM app_phrases
-    WHERE src_lang = %s AND dst_lang = %s AND src_phrase = %s
-    LIMIT 1
-  """
+    sql = """
+        SELECT dst_phrase
+        FROM app_phrases
+        WHERE src_lang = %s AND dst_lang = %s AND src_phrase = %s
+        LIMIT 1
+    """
 
-  data = (src_lang, dst_lang, src_phrase)
-  db_cur.execute(sql, data)
-  row = db_cur.fetchone()
+    data = (src_lang, dst_lang, src_phrase)
+    db_cur.execute(sql, data)
+    row = db_cur.fetchone()
 
-  if row is None:
-    return None
+    if row is None:
+        return None
 
-  return row[0]
+    return row[0]
+
 
 
 def list_to_string(l):
@@ -325,6 +328,13 @@ def make_dst_phrase_look_the_same(src_phrase: str, dst_phrase: str):
 def make_dst_not_translation_names_phrase_look_the_same(translated_phrase: str, phrase_info: PhraseInfo):
     for name in phrase_info.phrase_not_translation_names:
         translated_phrase = re.sub(re.escape(name), name, translated_phrase, flags=re.IGNORECASE)
+        
+    language_specific_not_translation_names_exception = {'یوٹیوب' : 'YouTube'}
+    
+    for lang_exception in language_specific_not_translation_names_exception:
+        if lang_exception in translated_phrase:
+            translated_phrase = translated_phrase.replace(lang_exception, language_specific_not_translation_names_exception[lang_exception])
+    
     return translated_phrase
 
 
