@@ -38,6 +38,14 @@ CREATE TABLE app_phrases (
     PRIMARY KEY (src_lang, dst_lang, src_phrase)
 );
 
+CREATE TABLE preferred_app_phrases (
+    src_lang CHAR(2) NOT NULL,
+    dst_lang CHAR(2) NOT NULL,
+    src_phrase TEXT NOT NULL,
+    dst_phrase TEXT NOT NULL,
+    PRIMARY KEY (src_lang, dst_lang, src_phrase)
+);
+
 
 -- CREATE EXTENSION IF NOT EXISTS hstore;
 

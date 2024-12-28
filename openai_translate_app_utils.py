@@ -157,6 +157,23 @@ def add_phrase_to_db(db_conn, db_cur, phrase_data: PhraseData):
     db_conn.commit()
 
 
+def get_preferred_phrase_from_db(db_cur, dst_lang, src_lang, src_phrase):
+    sql = """
+        SELECT dst_phrase
+        FROM preferred_app_phrases
+        WHERE src_lang = %s AND dst_lang = %s AND src_phrase = %s
+        LIMIT 1
+    """
+
+    data = (src_lang, dst_lang, src_phrase)
+    db_cur.execute(sql, data)
+    row = db_cur.fetchone()
+
+    if row is None:
+        return None
+
+    return row[0]
+
 def get_phrase_from_db(db_cur, dst_lang, src_lang, src_phrase):
     sql = """
         SELECT dst_phrase
@@ -328,13 +345,36 @@ def make_dst_phrase_look_the_same(src_phrase: str, dst_phrase: str):
 def make_dst_not_translation_names_phrase_look_the_same(translated_phrase: str, phrase_info: PhraseInfo):
     for name in phrase_info.phrase_not_translation_names:
         translated_phrase = re.sub(re.escape(name), name, translated_phrase, flags=re.IGNORECASE)
-        
-    language_specific_not_translation_names_exception = {'یوٹیوب' : 'YouTube'}
-    
+
+    language_specific_not_translation_names_exception = {
+        'یوٹیوب' : 'YouTube ',
+        'यूट्यूब': 'YouTube ',
+        'गुगल': 'Google ',
+        'கூகிள்': 'Google ',
+        'கூகுள்': 'Google ',
+        'யூடியூப்': 'YouTube ',
+        'গুগল': 'Google ',
+        'ইউটিউব': 'YouTube ',
+        'યુટ્યુબ': 'YouTube ',
+        'ગૂગલ': 'Google ',
+        'گوگل': 'Google ',
+        'یوتیوب': 'YouTube',
+        'గూగుల్': 'Google ',
+        'యూట్యూబ్': 'YouTube ',
+        'गूगल': 'Google ',
+        'ഗൂഗിൾ': 'Google ',
+        'ഗൂഗിളു': 'Google ',
+        'യൂട്യൂബ്': 'YouTube ',
+        'ಗೂಗಲ್': 'Google ',
+        'ಗುಗಲ್ೊಂ': 'Google ',
+        'ಯುಟ್ಯೂಬ್': 'YouTube '
+    }
+
     for lang_exception in language_specific_not_translation_names_exception:
         if lang_exception in translated_phrase:
             translated_phrase = translated_phrase.replace(lang_exception, language_specific_not_translation_names_exception[lang_exception])
-    
+            translated_phrase = translated_phrase.replace('  ', ' ')
+
     return translated_phrase
 
 

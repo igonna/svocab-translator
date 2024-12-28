@@ -72,6 +72,15 @@ def create_language_file(dst_lang_code, db_conn, db_cur):
             dst_phrases[phrase_key] = phrases[phrase_key]
             continue
 
+        # preferred phrase
+        preferred_phrase_translation_db = openai_translate_app_utils.get_preferred_phrase_from_db(db_cur, dst_lang_code, src_lang_code, src_phrase)
+
+        if preferred_phrase_translation_db is not None:
+            dst_phrases[phrase_key] = preferred_phrase_translation_db
+            translated_phrase_count += 1
+            continue
+
+        # default phrase
         phrase_translation_db = openai_translate_app_utils.get_phrase_from_db(db_cur, dst_lang_code, src_lang_code, src_phrase)
 
         if phrase_translation_db is not None:
@@ -200,7 +209,7 @@ def create_language_file(dst_lang_code, db_conn, db_cur):
 def process_language_code(dst_lang_code):
     if dst_lang_code == src_lang_code:
         return
-    
+
     db_conn = psycopg2.connect(
         dbname="svocab_ai_translations",
         user="svocab_ai_translator",
@@ -208,7 +217,7 @@ def process_language_code(dst_lang_code):
     )
 
     db_cur = db_conn.cursor()
-
+    
     create_language_file(dst_lang_code, db_conn, db_cur)
 
 
