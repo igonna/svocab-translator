@@ -16,8 +16,8 @@ def extract_language_codes_from_file(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
             dart_code = file.read()
-        
-        regex = r"List<String>\s+languageCodes\s+=\s+\[(.*?)\];"
+
+        regex = r"final\s+_supportedLocales\s*=\s*\[\s*(.*?)\s*\]\.map"
         match = re.search(regex, dart_code, re.DOTALL)
 
         if match:
@@ -174,7 +174,7 @@ def get_preferred_phrase_from_db(db_cur, dst_lang, src_lang, src_phrase):
 
     return row[0]
 
-def get_phrase_from_db(db_cur, dst_lang, src_lang, src_phrase):
+def get_phrase_from_db(db_cur, dst_lang, src_lang, src_phrase) -> str:
     sql = """
         SELECT dst_phrase
         FROM app_phrases
@@ -281,11 +281,6 @@ def extract_phrase_from_prompt(prompt):
     except:
         return ""
 
-def remove_periods_from_end(s):
-    while s and s[-1] == '.':
-        s = s[:-1]
-    return s
-
 def is_phrase_contains_braces(phrase: str):
     return phrase.count('{') > 0 and phrase.count('}') > 0
 
@@ -330,11 +325,23 @@ def is_variable_phrase_valid(phrase: str, variables):
 def double_single_quotes(phrase: str):
     return phrase.replace("'", "''")
 
+def is_symbol_period(c) -> bool:
+    period_symbols = [".", "。", "।", "ฯ", "።", "။"]
+    if c in period_symbols:
+        return True
+    else:
+        return False
+
+def remove_periods_from_end(s):
+    while s and is_symbol_period(s[-1]):
+        s = s[:-1]
+    return s
+
 def make_dst_phrase_look_the_same(src_phrase: str, dst_phrase: str):
     if src_phrase[0].isupper():
         dst_phrase = dst_phrase.capitalize()
 
-    if src_phrase[-1] != '.':
+    if not is_symbol_period(src_phrase[-1]):
         dst_phrase = remove_periods_from_end(dst_phrase)
 
     if src_phrase[-1] == ' ' and dst_phrase[-1] != ' ':
