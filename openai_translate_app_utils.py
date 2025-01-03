@@ -109,7 +109,7 @@ class PhraseInfo:
 def get_phrase_info(phrase_key: str, phrase: str, special_phrases_variables) -> PhraseInfo:
     phrase_variables = []
     phrase_not_translation_names = []
-    if phrase_key[0] == '@':
+    if len(phrase_key) > 0 and phrase_key[0] == '@':
         return PhraseInfo(is_phrase_for_translation=False, phrase_variables=phrase_variables, phrase_not_translation_names=phrase_not_translation_names)
 
     phrase_type = get_phrase_type(phrase)

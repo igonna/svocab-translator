@@ -15,21 +15,15 @@ const languages = {
 	'tl': ['en', 'tl'], 'am': ['en', 'ar'], 'kn': ['en', 'hi'], 'so': ['en', 'ar'], 'bg': ['en', 'ru'], 'pa': ['en', 'hi']
 };
 
-// const languages = ['en']
-
 targetComponentsNames = ["1_store_main", "2_store_simple_and_fast", "3_store_instant_feedback",
 	"4_store_topic_generation", "5_store_statistics", "6_store_topics_mix", "7_store_multiple_languages",
 	"8_store_dark_theme"
 ]
 
-// targetComponentsNames = ["5_store_statistics"]
-
-async function translateAllInstances(lang, paddingY) {
+async function translateAllInstances(ui_src_lang, dst_lang, paddingY) {
 	let allComponents = figma.root.findAll(node => node.type === 'COMPONENT');
 	for (const targetComponentName of targetComponentsNames) {
 		let targetComponent = allComponents.find(node => node.name === targetComponentName);
-	
-		// let addedTotalPadding = false;
 	
 		if (targetComponent) {
 			const originalX = targetComponent.x;
@@ -39,11 +33,9 @@ async function translateAllInstances(lang, paddingY) {
 
 			if (!instance) {
 				console.error('The instance is null or undefined.');
+				console.log('Instance type:', instance.type);
 				return;
 			}
-		
-			// Log the type of instance for debugging purposes
-			console.log('Instance type:', instance.type);
 			
 			// Ensure that instance is a ComponentInstance
 			if (instance.type !== 'INSTANCE') {
@@ -54,14 +46,36 @@ async function translateAllInstances(lang, paddingY) {
 			instance.x = originalX;
 			instance.y = originalY + paddingY;
 	
-			async function fetchTranslation(originalText) {
+			async function fetchTranslation(originalText, textNodeName) {
 				try {
+					const learn_screen_1 = new Set(["phrase_1_guess_space", "phrase_1_word_translation", "phrase_1_guess",
+						"phrase_1", "phrase_1_guess_word", "phrase_1_random_word_1", "phrase_1_random_word_2", "phrase_2_word"
+					]);
+			
+					const learn_screen_2 = new Set(["phrase_2_word", "phrase_2_word_translation", "phrase_2", "phrase_2_translation"]);
+
+					const popular_langs = new Set(["lang_1", "lang_2"]);
+
+					const one_word = new Set(["one_word"]);
+
+					if (learn_screen_1.has(textNodeName) 
+						|| learn_screen_2.has(textNodeName) 
+						|| popular_langs.has(textNodeName)
+						|| one_word.has(textNodeName)
+					) {
+						return "TODO";
+					}
+
 					const response = await fetch('http://localhost:30032/translate', {
 						method: 'POST',
 						headers: {
 							'Content-Type': 'application/json'
 						},
-						body: JSON.stringify({ text: originalText })
+						body: JSON.stringify({
+							text: originalText,
+							src_lang: ui_src_lang,
+							dst_lang: dst_lang
+						})
 					});
 	
 					if (!response.ok) {
@@ -93,12 +107,13 @@ async function translateAllInstances(lang, paddingY) {
 						continue;
 					}
 	
-					const translatedText = await fetchTranslation("Hello");
+					const translatedText = await fetchTranslation(textNode.characters, textNode.name);
+					console.log(`got translation: ${translatedText}`);
 					textNode.characters = translatedText;
 				}
 			}
 	
-			await translateInstanceTexts("", instance);
+			await translateInstanceTexts();
 		} else {
 			console.log(`Component ${targetComponentName} not found.`);
 		}
@@ -110,8 +125,9 @@ let paddingBetween = 100;
 
 let paddingY = heightOfComponent + paddingBetween;
 
-for (const [lang, value] of Object.entries(languages)) {
-	await translateAllInstances(lang, paddingY)
+for (const [dst_lang, popular_langs] of Object.entries(languages)) {
+	const ui_src_lang = 'en';
+	await translateAllInstances(ui_src_lang, dst_lang, paddingY);
 
 	paddingY = paddingY + heightOfComponent + paddingBetween;
 }
