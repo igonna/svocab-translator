@@ -9,3 +9,5 @@ googletrans
 deep_translator
 colorama
 pycountry
+flask
+flask_cors
