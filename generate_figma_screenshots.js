@@ -12,24 +12,87 @@ const languages = {
 	'ka': ['ru', 'en'], 'sq': ['en', 'it'], 'bs': ['en', 'hr'], 'sk': ['en', 'cs'], 'sl': ['en', 'it'], 'lt': ['en', 'ru'],
 	'lv': ['en', 'ru'], 'et': ['en', 'ru'], 'mk': ['en', 'bg'], 'ta': ['en', 'si'], 'te': ['en', 'hi'], 'ur': ['en', 'hi'],
 	'mr': ['en', 'hi'], 'gu': ['en', 'hi'], 'ml': ['en', 'ta'], 'kk': ['ru', 'en'], 'mn': ['ru', 'en'], 'my': ['en', 'zh'],
-	'tl': ['en', 'tl'], 'am': ['en', 'ar'], 'kn': ['en', 'hi'], 'so': ['en', 'ar'], 'bg': ['en', 'ru'], 'pa': ['en', 'hi']
+	'tl': ['en', 'ja'], 'am': ['en', 'ar'], 'kn': ['en', 'hi'], 'so': ['en', 'ar'], 'bg': ['en', 'ru'], 'pa': ['en', 'hi']
 };
 
-targetComponentsNames = ["1_store_main", "2_store_simple_and_fast", "3_store_instant_feedback",
+const exception_fonts = {'hy': 'Noto Sans Armenian', 'my': 'Noto Sans Myanmar', 'am': 'Noto Sans Ethiopic', 'pa': 'Noto Sans Gurmukhi'};
+
+const excluded_langs = new Set(['my']);
+
+const targetComponentsNames = ["1_store_main", "2_store_simple_and_fast", "3_store_instant_feedback",
 	"4_store_topic_generation", "5_store_statistics", "6_store_topics_mix", "7_store_multiple_languages",
 	"8_store_dark_theme"
 ]
 
-async function translateAllInstances(ui_src_lang, dst_lang, paddingY) {
-	let allComponents = figma.root.findAll(node => node.type === 'COMPONENT');
+const allComponents = figma.root.findAll(node => node.type === 'COMPONENT');
+
+const targetComponentsMap = {};
+for (const component of allComponents) {
+    if (targetComponentsNames.includes(component.name)) {
+        targetComponentsMap[component.name] = component;
+    }
+}
+
+async function translate_phrase(phrase, src_lang, dst_lang) {
+	const response = await fetch('http://localhost:30032/translate', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify({
+			text: phrase,
+			src_lang: src_lang,
+			dst_lang: dst_lang
+		})
+	});
+
+	if (!response.ok) {
+		return phrase;
+	}
+
+	const data = await response.json();
+	return data.translatedText || phrase;
+}
+
+async function translate_language(lang_code, dst_lang) {
+	const response = await fetch('http://localhost:30032/get_language_name', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify({
+			lang_code: lang_code,
+			translate_to: dst_lang
+		})
+	});
+
+	if (!response.ok) {
+		return "Error";
+	}
+
+	return (await response.json()).translatedLanguage || "Error";
+}
+
+const learn_screen_1 = new Set(["phrase_1_guess_space", "phrase_1_word_translation", "phrase_1_guess",
+	"phrase_1", "phrase_1_guess_word", "phrase_1_random_word_1", "phrase_1_random_word_2", "phrase_2_word"
+]);
+
+const learn_screen_2 = new Set(["phrase_2_word", "phrase_2_word_translation", "phrase_2", "phrase_2_translation"]);
+
+const popular_langs = new Set(["lang_1", "lang_2"]);
+
+const to_popular_lang_tags = new Set(["one_word", "text_source_content", "website_source_content"]);
+
+async function translateAllInstances(ui_src_lang, dst_lang, paddingY, popularLangs) {
 	for (const targetComponentName of targetComponentsNames) {
-		let targetComponent = allComponents.find(node => node.name === targetComponentName);
+		const targetComponent = targetComponentsMap[targetComponentName];
 	
 		if (targetComponent) {
 			const originalX = targetComponent.x;
 			const originalY = targetComponent.y;
 	
 			let instance = targetComponent.createInstance();
+			instance.name = instance.name + `_${dst_lang}`;
 
 			if (!instance) {
 				console.error('The instance is null or undefined.');
@@ -48,43 +111,20 @@ async function translateAllInstances(ui_src_lang, dst_lang, paddingY) {
 	
 			async function fetchTranslation(originalText, textNodeName) {
 				try {
-					const learn_screen_1 = new Set(["phrase_1_guess_space", "phrase_1_word_translation", "phrase_1_guess",
-						"phrase_1", "phrase_1_guess_word", "phrase_1_random_word_1", "phrase_1_random_word_2", "phrase_2_word"
-					]);
-			
-					const learn_screen_2 = new Set(["phrase_2_word", "phrase_2_word_translation", "phrase_2", "phrase_2_translation"]);
-
-					const popular_langs = new Set(["lang_1", "lang_2"]);
-
-					const one_word = new Set(["one_word"]);
-
-					if (learn_screen_1.has(textNodeName) 
-						|| learn_screen_2.has(textNodeName) 
-						|| popular_langs.has(textNodeName)
-						|| one_word.has(textNodeName)
+					if (learn_screen_1.has(textNodeName) || learn_screen_2.has(textNodeName) 
 					) {
 						return "TODO";
+					} else if (to_popular_lang_tags.has(textNodeName)) {
+						if (ui_src_lang != popularLangs[0]) {
+							return (await translate_phrase(originalText, ui_src_lang, popularLangs[0]));
+						} else {
+							return originalText;
+						}
+					} else if (popular_langs.has(textNodeName)) {
+						return (await translate_language(textNodeName == "lang_1" ? popularLangs[0] : popularLangs[1], dst_lang));
+					} else {
+						return (await translate_phrase(originalText, ui_src_lang, dst_lang));
 					}
-
-					const response = await fetch('http://localhost:30032/translate', {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json'
-						},
-						body: JSON.stringify({
-							text: originalText,
-							src_lang: ui_src_lang,
-							dst_lang: dst_lang
-						})
-					});
-	
-					if (!response.ok) {
-						console.error("Error fetching translation:", response.statusText);
-						return originalText;
-					}
-	
-					const data = await response.json();
-					return data.translatedText || originalText;
 				} catch (error) {
 					console.error("Error during fetch:", error);
 					return originalText;
@@ -108,6 +148,33 @@ async function translateAllInstances(ui_src_lang, dst_lang, paddingY) {
 					}
 	
 					const translatedText = await fetchTranslation(textNode.characters, textNode.name);
+
+					if (dst_lang in exception_fonts) {
+						async function setFont(desiredFontName) {
+							console.log(`desired font: ${desiredFontName}`);
+							try {
+								console.log(`current font name family: ${textNode.fontName.family}`);
+
+								const desiredFont = { family: desiredFontName, style: textNode.fontName.style };
+								await figma.loadFontAsync(desiredFont);
+								
+								textNode.fontName = desiredFont;
+							} catch (error) {
+								console.error("Error setting font or translating text:", error);
+							}
+						}
+
+						if (learn_screen_1.has(textNode.name) || learn_screen_2.has(textNode.name) 
+						) {
+							//
+						} else if (to_popular_lang_tags.has(textNode.name) && ui_src_lang != popularLangs[0]) {
+							await setFont(exception_fonts[dst_lang]);
+						} else if (popular_langs.has(textNode.name)) {
+							await setFont(exception_fonts[dst_lang]);
+						} else {
+							await setFont(exception_fonts[dst_lang]);
+						}
+					}
 					console.log(`got translation: ${translatedText}`);
 					textNode.characters = translatedText;
 				}
@@ -125,9 +192,18 @@ let paddingBetween = 100;
 
 let paddingY = heightOfComponent + paddingBetween;
 
+let counterBreak = 0;
+
 for (const [dst_lang, popular_langs] of Object.entries(languages)) {
 	const ui_src_lang = 'en';
-	await translateAllInstances(ui_src_lang, dst_lang, paddingY);
+
+	if (excluded_langs.has(dst_lang)) continue;
+	await translateAllInstances(ui_src_lang, dst_lang, paddingY, popular_langs);
 
 	paddingY = paddingY + heightOfComponent + paddingBetween;
+
+	counterBreak += 1;
+	if (counterBreak > 1) {
+		// break;
+	}
 }

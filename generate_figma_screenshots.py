@@ -5,6 +5,7 @@ from colorama import Back
 import colorama
 import psycopg2
 import traceback
+from babel import Locale
 
 colorama.init(autoreset=True)
 
@@ -112,6 +113,25 @@ def translate_text():
         print(f"translated_text: {translated_phrase}")
 
         return jsonify({"translatedText": translated_phrase})
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        return jsonify({"error": "An error occurred during translation"}), 500
+
+@app.route('/get_language_name', methods=['POST'])
+def get_language_name():
+    try:
+        data = request.get_json()
+        lang_code = data.get("lang_code", "")
+        translate_to = data.get("translate_to", "")
+
+        if lang_code == '' or translate_to == '':
+            raise Exception("not valid language length")
+
+        language_locale = Locale(lang_code)
+        display_language = language_locale.get_display_name(translate_to).capitalize()
+
+        print(f"translated_lang ({lang_code} -> {translate_to}): {display_language}")
+        return jsonify({"translatedLanguage": display_language})
     except Exception as e:
         print(f"Error occurred: {e}")
         return jsonify({"error": "An error occurred during translation"}), 500
