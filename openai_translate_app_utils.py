@@ -51,6 +51,7 @@ class PhraseType(Enum):
     PLURAL = "plural"
     VARIABLE = "variable"
     NOT_TRANSLATION_NAME = "not_translation_name"
+    NUMBER_BEGIN = "number_begin"
 
 def is_phrase_contains_not_translation_name(phrase: str):
     result = False
@@ -83,6 +84,8 @@ def get_phrase_type(phrase):
         return PhraseType.VARIABLE
     elif is_phrase_contains_not_translation_name(phrase):
         return PhraseType.NOT_TRANSLATION_NAME
+    elif len(phrase) > 0 and phrase[0].isdigit():
+        return PhraseType.NUMBER_BEGIN
     else:
         return PhraseType.DEFAULT
 
@@ -251,6 +254,14 @@ def openai_plural_phrase_is_of_lang(src_phrase, dst_phrase, dst_lang_name):
     result = openai_prompt_exec(prompt)
     return 'yes' in result.lower()
 
+def openai_number_begin_phrase_translation(src_phrase, dst_lang):
+    prompt = 'translate this English android app phrase about learned "' + src_phrase + '" in formal way to ' + dst_lang + ', phrase should start with same number as in original phrase, output this only as json {"translated_phrase": ""}'
+    return openai_prompt_exec(prompt)
+
+def openai_number_begin_is_of_lang(src_phrase, dst_phrase, dst_lang_name):
+    prompt = 'is ' + dst_lang_name + ' ' + dst_phrase + ' a possible translation for English ' + src_phrase + ', and is it starts with number, output only yes or no'
+    result = openai_prompt_exec(prompt)
+    return 'yes' in result.lower()
 
 def is_entire_phrase_not_translation(phrase: str):
     result = False

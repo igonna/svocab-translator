@@ -73,11 +73,19 @@ async function translate_language(lang_code, dst_lang) {
 	return (await response.json()).translatedLanguage || "Error";
 }
 
+
+const learn_screen_2_phrases = {
+	'phrase_3': 'Not all those who wonder are lost',
+	'phrase_3_word': 'wonder'
+};
+
+const phrase_2_word_translation_text = "universe";
+
 const learn_screen_1 = new Set(["phrase_1_guess_space", "phrase_1_word_translation", "phrase_1_guess",
 	"phrase_1", "phrase_1_guess_word", "phrase_1_random_word_1", "phrase_1_random_word_2", "phrase_2_word"
 ]);
 
-const learn_screen_2 = new Set(["phrase_2_word", "phrase_2_word_translation", "phrase_2", "phrase_2_translation"]);
+const learn_screen_2 = new Set(["phrase_3_word", "phrase_3_word_translation", "phrase_3", "phrase_3_translation"]);
 
 const popular_langs = new Set(["lang_1", "lang_2"]);
 
