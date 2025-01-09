@@ -24,7 +24,7 @@ def add_word_phrase_to_db(db_conn, db_cur, word_phrase_data: WordPhrasePair):
 def get_word_phrase_from_db(db_cur, dst_lang, src_lang, src_phrase, src_word):
     sql = """
         SELECT dst_word, dst_phrase
-        FROM app_phrases
+        FROM word_phrase_pair
         WHERE src_lang = %s AND dst_lang = %s AND src_phrase = %s AND src_word = %s
         LIMIT 1
     """
@@ -36,7 +36,7 @@ def get_word_phrase_from_db(db_cur, dst_lang, src_lang, src_phrase, src_word):
     if row is None:
         return None
 
-    return row[0], row[1]
+    return row[1], row[0]
 
 def is_word_phrase_pair_contains_words(src_phrase, src_word, dst_phrase, dst_word):
     if src_word not in src_phrase:
@@ -49,8 +49,13 @@ def is_word_phrase_pair_contains_words(src_phrase, src_word, dst_phrase, dst_wor
 
 def openai_translate_phrase_and_exclude_word_translation(src_lang, dst_lang, src_phrase, src_word):
     prompt = 'translate this ' + src_lang + ' phrase "' + src_phrase + '" in formal way to ' + dst_lang
-    prompt = prompt + ' and exclude "' + src_word + '" word translation from phrase, output this only as json {"translated_phrase": "", "excluded_word_translation": ""}'
+    prompt = prompt + ' and extract "' + src_word + '" word translation from phrase, output this only as json {"translated_phrase": "", "extracted_word_translation": ""}'
     return openai_translate_app_utils.openai_prompt_exec(prompt)
+
+# const std::string prompt = std::string("generate ") + src_lang_name + " meaningful phrase from word '" 
+#     + src_word + "' and translate this phrase to " + dst_lang_name + " and extract word translation from phrase,"
+#     + " output this only as csv \"" + src_lang_name + " phrase\" ; \"" + dst_lang_name + " phrase\" ; \"extracted '" + src_word + "' word translation from " + dst_lang_name + " phrase\"";
+
 
 def openai_is_phrase_translation_valid(src_phrase, dst_phrase, src_lang_name, dst_lang_name):
     prompt = 'is ' + dst_lang_name + ' phrase "' + dst_phrase + '" a possible translation for ' + src_lang_name + ' phrase "' + src_phrase + '", output only yes or no'
@@ -66,22 +71,22 @@ def extract_word_phrase_from_prompt(prompt):
         if extracted_phrase == "":
             return None
 
-        excluded_word_translation = json_object.get("excluded_word_translation", "")
-        if excluded_word_translation == "":
+        extracted_word_translation = json_object.get("extracted_word_translation", "")
+        if extracted_word_translation == "":
             return None
 
         if "translated_phrase" in extracted_phrase or "translated phrase" in extracted_phrase:
             return None
 
-        if "translated_phrase" in excluded_word_translation or "translated phrase" in excluded_word_translation:
+        if "translated_phrase" in extracted_word_translation or "translated phrase" in extracted_word_translation:
             return None
 
-        if "excluded_word_translation" in extracted_phrase or "excluded word translation" in extracted_phrase:
+        if "extracted_word_translation" in extracted_phrase or "excluded word translation" in extracted_phrase:
             return None
 
-        if "excluded_word_translation" in excluded_word_translation or "excluded word translation" in excluded_word_translation:
+        if "extracted_word_translation" in extracted_word_translation or "excluded word translation" in extracted_word_translation:
             return None
 
-        return extracted_phrase, excluded_word_translation
+        return extracted_phrase, extracted_word_translation
     except:
         return None

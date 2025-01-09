@@ -26,7 +26,7 @@ def translate_phrase(src_phrase, src_lang_code, dst_lang_code, db_conn, db_cur):
         return phrase_translation_db
 
     # generation required
-    max_retry = 4
+    max_retry = 8
     retry_count = 0
     translated_phrase = ''
     was_not_valid_lang_error = False
@@ -101,11 +101,11 @@ def translate_word_phrase(src_phrase, src_word, src_lang_code, dst_lang_code, db
         return word_phrase_translation_db
 
     # generation required
-    max_retry = 4
+    max_retry = 8
     retry_count = 0
     dst_word = ''
     dst_phrase = ''
-    while(retry_count < max_retry and dst_phrase == '' and dst_word == ''):
+    while(retry_count < max_retry and (dst_phrase == '' or dst_word == '')):
         # verify that phrase valid
         try:
             prompt_result = generate_figma_screenshots_utils.openai_translate_phrase_and_exclude_word_translation(src_lang_name, dst_lang_name, src_phrase, src_word)
@@ -192,7 +192,7 @@ def translate_text():
 
 
 @app.route('/translate_word_phrase', methods=['POST'])
-def translate_text():
+def translate_word_phrase_text():
     try:
         data = request.get_json()
         src_lang_code = data.get("src_lang", "")
@@ -223,13 +223,16 @@ def translate_text():
             translated_word_phrase = translate_word_phrase(src_phrase, src_word, src_lang_code, dst_lang_code, db_conn, db_cur)
             if translated_word_phrase is None:
                 raise Exception("word phrase is None")
+
             dst_phrase, dst_word = translated_word_phrase
+            
+            print(f"dst_phrase: {dst_phrase}, dst_word: {dst_word}")
         except Exception as e:
             print(f"got exception: {e}")
             traceback.print_exc()
             raise
 
-        print(f"result: phrase: {dst_phrase}, word: {dst_word}")
+        print(f"result word phrase: phrase: {dst_phrase}, word: {dst_word}")
 
         return jsonify({"dst_phrase": dst_phrase, "dst_word": dst_word})
     except Exception as e:
