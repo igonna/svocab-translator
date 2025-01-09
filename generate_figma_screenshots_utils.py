@@ -38,18 +38,18 @@ def get_word_phrase_from_db(db_cur, dst_lang, src_lang, src_phrase, src_word):
 
     return row[1], row[0]
 
-def is_word_phrase_pair_contains_words(src_phrase, src_word, dst_phrase, dst_word):
-    if src_word not in src_phrase:
+def is_word_phrase_pair_contains_words(src_phrase: str, src_word: str, dst_phrase: str, dst_word: str):
+    if src_word.lower() not in src_phrase.lower():
         return False
 
-    if dst_word not in dst_phrase:
+    if dst_word.lower() not in dst_phrase.lower():
         return False
 
     return True
 
 def openai_translate_phrase_and_exclude_word_translation(src_lang, dst_lang, src_phrase, src_word):
     prompt = 'translate this ' + src_lang + ' phrase "' + src_phrase + '" in formal way to ' + dst_lang
-    prompt = prompt + ' and extract "' + src_word + '" word translation from phrase, output this only as json {"translated_phrase": "", "extracted_word_translation": ""}'
+    prompt = prompt + ' and extract "' + src_word + '" word translation from translated phrase, output this only as json {"translated_phrase": "", "extracted_word_translation": ""}'
     return openai_translate_app_utils.openai_prompt_exec(prompt)
 
 # const std::string prompt = std::string("generate ") + src_lang_name + " meaningful phrase from word '" 

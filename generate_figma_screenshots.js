@@ -100,6 +100,8 @@ const popular_langs = new Set(["lang_1", "lang_2"]);
 
 const to_popular_lang_tags = new Set(["one_word", "text_source_content", "website_source_content"]);
 
+const phrase_2_word_translation_text = "universe";
+
 const phrase_1_text = "There is more in you than you know";
 const phrase_1_word_text = "more";
 
@@ -155,6 +157,15 @@ let error_count = 0;
 async function fetchTranslation(originalText, textNodeName, src_lang, dst_lang, popularLangs) {
 	try {
 		// learn screen 1
+		if (textNodeName == "phrase_2_word_translation") {
+			if (popularLangs[0] == 'en') {
+				return { text: phrase_2_word_translation_text, text_lang: 'en' };
+			} else {
+				let txt = await translate_phrase(phrase_2_word_translation_text, src_lang, popularLangs[0]);
+				return { text: txt, text_lang: popularLangs[0] };
+			}
+		}
+
 		if (textNodeName == "phrase_1_word_translation") {
 			if (popularLangs[0] == 'en') {
 				let word_phrase = await translate_word_phrase(phrase_1_text, phrase_1_word_text, src_lang, dst_lang);
@@ -378,8 +389,6 @@ const test_set = new Set([
 
 for (const [dst_lang, popular_langs] of Object.entries(languages)) {
 	const ui_src_lang = 'en';
-
-	if (dst_lang == 'en') continue;
 
 	// if (!(dst_lang in exception_fonts)) continue;
 
