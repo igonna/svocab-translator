@@ -97,6 +97,24 @@ def update_listing(service, edit_id, lang_code, title, short_description, long_d
             'shortDescription': short_description,
             'fullDescription': long_description
     }).execute()
+    
+def is_listing_updated(service, edit_id, lang_code, new_title, new_short_description, new_long_description):
+    try:
+        response = service.edits().listings().get(
+            editId=edit_id,
+            packageName=PACKAGE_NAME,
+            language=lang_code
+        ).execute()
+
+        title = response.get('title', '')
+        short_description = response.get('shortDescription', '')
+        long_description = response.get('fullDescription', '')
+
+        if title == new_title and short_description == new_short_description and long_description == new_long_description:
+            return True
+        return False
+    except Exception as e:
+        return False
 
 def get_sha1_of_file(file_path):
     sha1_hash = hashlib.sha1()
@@ -314,27 +332,41 @@ def main():
         
         titles, short_descriptions, long_descriptions = get_prepared_listings_texts()
         # exit(0)
+        
+        edits_to_commit = 3
+        edits_passed = 0
+        edit_id = ''
 
-        for lang_code in language_screenshots:
-            edit_id = create_edit_session(service)
-            
+        for lang_code in language_screenshots:            
             localization_code = get_popular_localization(lang_code)
             
             if localization_code is None:
                 print(f"localization code is none: {lang_code}")
                 continue
+            
+            if edit_id == '':
+                edit_id = create_edit_session(service)
 
-            update_listing(service, edit_id, localization_code, titles[lang_code], short_descriptions[lang_code], long_descriptions[lang_code])
+            listing_updated = is_listing_updated(service, edit_id, localization_code, titles[lang_code], short_descriptions[lang_code], long_descriptions[lang_code])
+            if not listing_updated:
+                print(f"updating listing for ({lang_code})")
+                update_listing(service, edit_id, localization_code, titles[lang_code], short_descriptions[lang_code], long_descriptions[lang_code])
 
             screenshot_files = language_screenshots[lang_code]
-
             screenshots_uploaded = is_screenshots_uploaded(service, edit_id, localization_code, screenshot_files)
 
             if not screenshots_uploaded:
-                print(f"uploading screenshots for: {lang_code}")
+                print(f"uploading screenshots for ({lang_code})")
                 remove_screenshots(service, edit_id, localization_code)
                 upload_screenshots(service, edit_id, localization_code, screenshot_files)
 
+            edits_passed += 1
+            if edit_id != '' and edits_passed >= edits_to_commit:
+                commit_edit(service, edit_id)
+                edit_id = ''
+                edits_passed = 0
+    
+        if edit_id != '':
             commit_edit(service, edit_id)
 
     except Exception as e:
