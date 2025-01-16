@@ -43,10 +43,13 @@ app_name_max_len = 30
 
 title_src = app_name_p1 + app_name_p2
 
-short_description_src = 'Generate phrases from your sources, learn 60 languages and millions of words'
+short_description_src = 'Learn languages and millions of words with generated phrases from your sources'
+short_description_shorter_src = 'Learn languages and words with generated phrases from your sources'
+short_description_even_shorter_src = 'Learn languages and words with generated phrases'
+
 short_description_max_len = 80
 
-long_description_src = 'English, Spanish, French, German, Chinese, Japanese, Italian, Portuguese, Russian, Korean, Arabic, Dutch, Swedish, Turkish, Hindi, Norwegian, Greek, Polish, Vietnamese, Indonesian, Danish, Thai, Ukrainian, Persian, Czech, Finnish, Romanian, Swahili, Hungarian, Catalan, Bangla, Icelandic, Malay, Serbian, Croatian, Armenian, Georgian, Albanian, Bosnian, Slovak, Slovenian, Lithuanian, Latvian, Estonian, Macedonian, Tamil, Telugu, Urdu, Marathi, Gujarati, Malayalam, Kazakh, Mongolian, Burmese, Amharic, Kannada, Somali, Bulgarian, Punjabi'
+long_description_src = 'Learn languages: English, Spanish, French, German, Chinese, Japanese, Italian, Portuguese, Russian, Korean, Arabic, Dutch, Swedish, Turkish, Hindi, Norwegian, Greek, Polish, Vietnamese, Indonesian, Danish, Thai, Ukrainian, Persian, Czech, Finnish, Romanian, Swahili, Hungarian, Catalan, Bangla, Icelandic, Malay, Serbian, Croatian, Armenian, Georgian, Albanian, Bosnian, Slovak, Slovenian, Lithuanian, Latvian, Estonian, Macedonian, Tamil, Telugu, Urdu, Marathi, Gujarati, Malayalam, Kazakh, Mongolian, Burmese, Amharic, Kannada, Somali, Bulgarian, Punjabi'
 long_description_max_len = 4000
 
 SERVICE_ACCOUNT_FILE = 'secrets/svocab_publish.json'
@@ -152,7 +155,7 @@ def translate_text(db_conn, db_cur, src_text, lang_code, translation_logic):
     translated_text = ''
 
     retry_count = 0
-    max_retry_count = 8
+    max_retry_count = 12
     while translated_text == '' and retry_count < max_retry_count:
         try:
             dst_lang_name = openai_translate_app_utils.get_language_name(lang_code)
@@ -194,6 +197,56 @@ def title_translation_logic(src_text, dst_lang_name):
         raise Exception("openai translation not valid")
     return translated_text
 
+# translation app short description
+def openai_short_description_translation(src_description, dst_lang):
+    prompt = 'translate this play store short description of ai generation app "' + src_description + '" in formal form to ' + dst_lang + ' maximum length is 80 symbols, output this only as json {"translated_description": ""}'
+    return openai_translate_app_utils.openai_prompt_exec(prompt)
+
+def short_description_translation_logic(src_text, dst_lang_name):
+    prompt_result = openai_short_description_translation(src_text, dst_lang_name)
+    extracted_text = openai_translate_app_utils.extract_phrase_from_prompt_by_key(prompt_result, 'translated_description')
+    translated_text = openai_translate_app_utils.remove_periods_from_end(extracted_text)
+
+    if len(translated_text) > 80 or len(translated_text) == 0:
+        src_text = short_description_shorter_src
+        prompt_result = openai_short_description_translation(src_text, dst_lang_name)
+        extracted_text = openai_translate_app_utils.extract_phrase_from_prompt_by_key(prompt_result, 'translated_description')
+        translated_text = openai_translate_app_utils.remove_periods_from_end(extracted_text)
+
+        if len(translated_text) > 80 or len(translated_text) == 0:
+            src_text = short_description_even_shorter_src
+            prompt_result = openai_short_description_translation(src_text, dst_lang_name)
+            extracted_text = openai_translate_app_utils.extract_phrase_from_prompt_by_key(prompt_result, 'translated_description')
+            translated_text = openai_translate_app_utils.remove_periods_from_end(extracted_text)
+            if len(translated_text) > 80 or len(translated_text) == 0:
+                raise Exception(f"not valid length: {len(translated_text)}")
+
+    is_valid = openai_is_description_translation_valid(src_text, translated_text, dst_lang_name)
+    if not is_valid:
+        print(f"dst_phrase: {translated_text}")
+        raise Exception("openai translation not valid")
+    return translated_text
+
+def openai_long_description_translation(src_description, dst_lang):
+    prompt = 'translate this play store long description of ai generation app "' + src_description + '" in formal form to ' + dst_lang + ', output this only as json {"translated_description": ""}'
+    return openai_translate_app_utils.openai_prompt_exec(prompt)
+
+def long_description_translation_logic(src_text, dst_lang_name):
+    prompt_result = openai_long_description_translation(src_text, dst_lang_name)
+    extracted_text = openai_translate_app_utils.extract_phrase_from_prompt_by_key(prompt_result, 'translated_description')
+    translated_text = openai_translate_app_utils.remove_periods_from_end(extracted_text)
+
+    if len(translated_text) > 4000 or len(translated_text) == 0:
+        raise Exception(f"not valid length: {len(translated_text)}")
+
+    is_valid = openai_is_description_translation_valid(src_text, translated_text, dst_lang_name)
+    if not is_valid:
+        print(f"dst_phrase: {translated_text}")
+        raise Exception("openai translation not valid")
+    return translated_text
+
+# translation app long description
+
 def get_prepared_listings_texts():
     titles = {}
     short_descriptions = {}
@@ -215,7 +268,7 @@ def get_prepared_listings_texts():
             short_descriptions[lang_code] = short_description_src
             long_descriptions[lang_code] = long_description_src
         else:
-            title_p2 = translate_text(
+            titles[lang_code] = app_name_p1 + translate_text(
                 db_conn=db_conn,
                 db_cur=db_cur,
                 src_text=app_name_p2,
@@ -223,8 +276,26 @@ def get_prepared_listings_texts():
                 translation_logic=title_translation_logic
             )
 
-            titles[lang_code] = app_name_p1 + title_p2
-            print(f'dst_title ({lang_code}): {titles[lang_code]}')
+            short_descriptions[lang_code] = translate_text(
+                db_conn=db_conn,
+                db_cur=db_cur,
+                src_text=short_description_src,
+                lang_code=lang_code,
+                translation_logic=short_description_translation_logic
+            )
+
+            long_descriptions[lang_code] = translate_text(
+                db_conn=db_conn,
+                db_cur=db_cur,
+                src_text=long_description_src,
+                lang_code=lang_code,
+                translation_logic=long_description_translation_logic
+            )
+
+            # print(f'({lang_code}) title: {titles[lang_code]}')
+            # print(f'({lang_code}) short_description: {short_descriptions[lang_code]}')
+            # print(f'({lang_code}) long_description: {long_descriptions[lang_code]}')
+            # print('')
             continue
 
     return titles, short_descriptions, long_descriptions
@@ -242,7 +313,7 @@ def main():
         print(f"languages count: {len(language_screenshots)}")
         
         titles, short_descriptions, long_descriptions = get_prepared_listings_texts()
-        exit(0)
+        # exit(0)
 
         for lang_code in language_screenshots:
             edit_id = create_edit_session(service)
