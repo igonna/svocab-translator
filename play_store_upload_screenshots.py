@@ -333,8 +333,8 @@ def main():
         titles, short_descriptions, long_descriptions = get_prepared_listings_texts()
         # exit(0)
         
-        edits_to_commit = 3
-        edits_passed = 0
+        changes_to_commit = 4
+        changes_made = 0
         edit_id = ''
 
         for lang_code in language_screenshots:            
@@ -351,6 +351,7 @@ def main():
             if not listing_updated:
                 print(f"updating listing for ({lang_code})")
                 update_listing(service, edit_id, localization_code, titles[lang_code], short_descriptions[lang_code], long_descriptions[lang_code])
+                changes_made += 1
 
             screenshot_files = language_screenshots[lang_code]
             screenshots_uploaded = is_screenshots_uploaded(service, edit_id, localization_code, screenshot_files)
@@ -359,15 +360,17 @@ def main():
                 print(f"uploading screenshots for ({lang_code})")
                 remove_screenshots(service, edit_id, localization_code)
                 upload_screenshots(service, edit_id, localization_code, screenshot_files)
+                changes_made += 1
 
-            edits_passed += 1
-            if edit_id != '' and edits_passed >= edits_to_commit:
+            if edit_id != '' and changes_made >= changes_to_commit:
                 commit_edit(service, edit_id)
+                print('commit made')
                 edit_id = ''
-                edits_passed = 0
+                changes_made = 0
     
-        if edit_id != '':
+        if edit_id != '' and changes_made > 0:
             commit_edit(service, edit_id)
+            print('commit made')
 
     except Exception as e:
         print(f"An error occurred: {e}")
