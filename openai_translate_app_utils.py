@@ -291,6 +291,20 @@ def extract_phrase_from_prompt(prompt):
         return extracted_phrase
     except:
         return ""
+    
+# prompt extraction
+def extract_phrase_from_prompt_by_key(prompt, json_key):
+    try:
+        clean_prompt = prompt.strip("```json ").strip("```")
+        json_object = json.loads(clean_prompt)
+        extracted_phrase = json_object.get(json_key, "")
+        
+        if json_key in extracted_phrase:
+            return ""
+
+        return extracted_phrase
+    except:
+        return ""
 
 def is_phrase_contains_braces(phrase: str):
     return phrase.count('{') > 0 and phrase.count('}') > 0

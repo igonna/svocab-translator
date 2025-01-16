@@ -108,7 +108,7 @@ def create_language_file(dst_lang_code, db_conn, db_cur):
             print(f"prompt result: {prompt_result}")
             translated_phrase = openai_translate_app_utils.extract_phrase_from_prompt(prompt_result)
             print(f"translated phrase: {translated_phrase}")
-            translated_phrase = openai_translate_app_utils.make_dst_phrase_look_the_same(src_phrase, translated_phrase)            
+            translated_phrase = openai_translate_app_utils.make_dst_phrase_look_the_same(src_phrase, translated_phrase)
             translated_phrase = openai_translate_app_utils.double_single_quotes(translated_phrase)
             
             if phrase_info.phrase_type == openai_translate_app_utils.PhraseType.NOT_TRANSLATION_NAME:
