@@ -333,11 +333,13 @@ def main():
         titles, short_descriptions, long_descriptions = get_prepared_listings_texts()
         # exit(0)
         
-        changes_to_commit = 4
+        changes_to_commit = 8
         changes_made = 0
         edit_id = ''
 
-        for lang_code in language_screenshots:            
+        for lang_code in language_screenshots:
+            # if lang_code != 'ru':
+            #     continue
             localization_code = get_popular_localization(lang_code)
             
             if localization_code is None:
@@ -362,11 +364,11 @@ def main():
                 upload_screenshots(service, edit_id, localization_code, screenshot_files)
                 changes_made += 1
 
-            if edit_id != '' and changes_made >= changes_to_commit:
-                commit_edit(service, edit_id)
-                print('commit made')
-                edit_id = ''
-                changes_made = 0
+            # if edit_id != '' and changes_made >= changes_to_commit:
+            #     commit_edit(service, edit_id)
+            #     print('commit made')
+            #     edit_id = ''
+            #     changes_made = 0
     
         if edit_id != '' and changes_made > 0:
             commit_edit(service, edit_id)
