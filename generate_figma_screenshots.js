@@ -33,14 +33,16 @@ for (const component of allComponents) {
     }
 }
 
-const guess_word_frame_comp = figma.currentPage.findOne(node => node.type === 'COMPONENT' && node.name === 'guess_word_frame_comp');
-const guess_text_comp = figma.currentPage.findOne(node => node.type === 'COMPONENT' && node.name === 'guess_text_comp');
 
-const guess_word_frame_comp_2 = figma.currentPage.findOne(node => node.type === 'COMPONENT' && node.name === 'guess_word_frame_comp_2');
-const guess_text_comp_2 = figma.currentPage.findOne(node => node.type === 'COMPONENT' && node.name === 'guess_text_comp_2');
+const frame_with_all_components = figma.currentPage.findOne(node => node.type === 'FRAME' && node.name === 'frame_with_all_components');
+const guess_word_frame_comp = frame_with_all_components.findOne(node => node.type === 'COMPONENT' && node.name === 'guess_word_frame_comp');
+const guess_text_comp = frame_with_all_components.findOne(node => node.type === 'COMPONENT' && node.name === 'guess_text_comp');
 
-const translation_word_comp = figma.currentPage.findOne(node => node.type === 'COMPONENT' && node.name === 'translation_word_comp');
-const translation_text_comp = figma.currentPage.findOne(node => node.type === 'COMPONENT' && node.name === 'translation_text_comp');
+const guess_word_frame_comp_2 = frame_with_all_components.findOne(node => node.type === 'COMPONENT' && node.name === 'guess_word_frame_comp_2');
+const guess_text_comp_2 = frame_with_all_components.findOne(node => node.type === 'COMPONENT' && node.name === 'guess_text_comp_2');
+
+const translation_word_comp = frame_with_all_components.findOne(node => node.type === 'COMPONENT' && node.name === 'translation_word_comp');
+const translation_text_comp = frame_with_all_components.findOne(node => node.type === 'COMPONENT' && node.name === 'translation_text_comp');
 
 async function translate_phrase(phrase, src_lang, dst_lang) {
 	const response = await fetch('http://localhost:30032/translate', {
@@ -398,6 +400,7 @@ async function translateAllInstances(ui_src_lang, dst_lang, paddingY, popularLan
 
 			async function setInstanceText(inst, text) {
 				let textNode = inst.findOne(node => node.type === 'TEXT');
+				await figma.loadFontAsync(textNode.fontName);
 				textNode.characters = text;
 			}
 
@@ -443,12 +446,16 @@ async function translateAllInstances(ui_src_lang, dst_lang, paddingY, popularLan
 				let phrase_1_translation_lang = phrase_1_translation_result.text_lang;
 				let phrase_1_word_translation = (await fetchTranslation('', is_first_comp ? 'phrase_1_word_translation' : 'phrase_3_word_translation', ui_src_lang, dst_lang, popularLangs)).text;
 
+				phrase_1_translation = phrase_1_translation.replace(phrase_1_word_translation, ' * ');
+
+				phrase_1_translation = phrase_1_translation.replace('  ', ' ');
+
 				let phrase_1_translation_splited = phrase_1_translation.split(" ");
 
 				for (let phrase_part of phrase_1_translation_splited) {
-					if (phrase_part.toLowerCase() === phrase_1_word_translation.toLowerCase()) {
+					if (phrase_part == '*') {
 						let inst = translation_word_comp.createInstance();
-						setInstanceText(inst, phrase_part);
+						setInstanceText(inst, phrase_1_word_translation);
 						await setInstanceValidFont(inst, phrase_1_translation_lang);
 						translation_frame.appendChild(inst);
 					} else {
@@ -487,9 +494,9 @@ let paddingY = heightOfComponent + paddingBetween;
 for (const [dst_lang, popular_langs] of Object.entries(languages)) {
 	const ui_src_lang = 'en';
 
-	// if (!(dst_lang in exception_fonts)) continue;
+	if ((dst_lang in exception_fonts)) continue;
 
-	if (dst_lang != 'hy') continue;
+	if (dst_lang != 'ko') continue;
 	console.log(`dst_lang: ${dst_lang}`);
 
 	if (excluded_langs.has(dst_lang)) continue;
