@@ -312,18 +312,27 @@ async function fetchTranslation(originalText, textNodeName, src_lang, dst_lang, 
 async function setFontForText(text_lang, textNode) {
 	if (text_lang in exception_fonts) {
 		try {
-			const desiredFont = { family: exception_fonts[dst_lang], style: textNode.fontName.style };
-			await figma.loadFontAsync(desiredFont);
-			textNode.fontName = desiredFont;
+			try {
+				console.log("set it here 1");
+				const desiredFont = { family: exception_fonts[text_lang], style: textNode.fontName.style };
+				await figma.loadFontAsync(desiredFont);
+				textNode.fontName = desiredFont;
+			} catch (error) {
+				console.log("set it here 2");
+				console.log(`style: ${textNode.fontName.style}`);
+				const desiredFont = { family: exception_fonts[text_lang], style: textNode.fontName.style.replace(' ', '') };
+				await figma.loadFontAsync(desiredFont);
+				textNode.fontName = desiredFont;
+			}
 		} catch (error) {
-			console.error("Error setting font or translating text:", error);
+			console.error("Error setting font or translating text 1:", error);
 		}
 	}
 }
 
 async function translateAllInstances(ui_src_lang, dst_lang, paddingY, popularLangs) {
 	for (const targetComponentName of targetComponentsNames) {
-		if (targetComponentName == "4_store_topic_generation") return;
+		// if (targetComponentName == "4_store_topic_generation") return;
 
 		const targetComponent = targetComponentsMap[targetComponentName];
 	
@@ -358,6 +367,11 @@ async function translateAllInstances(ui_src_lang, dst_lang, paddingY, popularLan
 			instance.y = originalY + paddingY;
 
 			async function translateInstanceTexts() {
+				if (targetComponentName === "3_store_instant_feedback") {
+					let group_to_detach = instance.findAllWithCriteria({ types: ['INSTANCE'] }).find(frame => frame.name === 'group_to_detach');
+					group_to_detach.detachInstance();
+				}
+
 				const textNodes = instance.findAllWithCriteria({ types: ['TEXT'] });
 			
 				for (const textNode of textNodes) {
@@ -382,18 +396,10 @@ async function translateAllInstances(ui_src_lang, dst_lang, paddingY, popularLan
 
 					// font
 					if (text_lang in exception_fonts) {
-						async function setFont(desiredFontName) {
-							try {
-								const desiredFont = { family: desiredFontName, style: textNode.fontName.style };
-								await figma.loadFontAsync(desiredFont);
-								textNode.fontName = desiredFont;
-							} catch (error) {
-								console.error("Error setting font or translating text:", error);
-							}
-						}
-						await setFont(exception_fonts[dst_lang]);
+						console.log(`set font for text lang: ${text_lang}, text: ${translation_result.text}`);
+						
+						await setFontForText(text_lang, textNode);
 					}
-					console.log(`got translation: ${translation_result.text}`);
 					textNode.characters = translation_result.text;
 				}
 			}
@@ -447,15 +453,24 @@ async function translateAllInstances(ui_src_lang, dst_lang, paddingY, popularLan
 				let phrase_1_word_translation = (await fetchTranslation('', is_first_comp ? 'phrase_1_word_translation' : 'phrase_3_word_translation', ui_src_lang, dst_lang, popularLangs)).text;
 
 				phrase_1_translation = phrase_1_translation.replace(phrase_1_word_translation, ' * ');
-
 				phrase_1_translation = phrase_1_translation.replace('  ', ' ');
 
 				let phrase_1_translation_splited = phrase_1_translation.split(" ");
 
+				console.log(`word part: '${phrase_1_word_translation}'`);
+
 				for (let phrase_part of phrase_1_translation_splited) {
-					if (phrase_part == '*') {
+					console.log(`phrase part: '${phrase_part}'`);
+					if (phrase_part == '') {
+						continue;
+					} else if (phrase_part == '*') {
 						let inst = translation_word_comp.createInstance();
 						setInstanceText(inst, phrase_1_word_translation);
+						await setInstanceValidFont(inst, phrase_1_translation_lang);
+						translation_frame.appendChild(inst);
+					} else if (phrase_part.toLowerCase() === phrase_1_word_translation.toLowerCase()) {
+						let inst = translation_word_comp.createInstance();
+						setInstanceText(inst, phrase_part);
 						await setInstanceValidFont(inst, phrase_1_translation_lang);
 						translation_frame.appendChild(inst);
 					} else {
@@ -491,12 +506,14 @@ let paddingBetween = 100;
 
 let paddingY = heightOfComponent + paddingBetween;
 
+const test_langs = new Set(['hy']);
+
 for (const [dst_lang, popular_langs] of Object.entries(languages)) {
 	const ui_src_lang = 'en';
 
-	if ((dst_lang in exception_fonts)) continue;
+	// if (!(dst_lang in exception_fonts)) continue;
 
-	if (dst_lang != 'ko') continue;
+	// if (!(test_langs.has(dst_lang))) continue;
 	console.log(`dst_lang: ${dst_lang}`);
 
 	if (excluded_langs.has(dst_lang)) continue;
