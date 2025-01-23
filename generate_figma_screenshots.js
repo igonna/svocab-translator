@@ -33,6 +33,15 @@ for (const component of allComponents) {
     }
 }
 
+const guess_word_frame_comp = figma.currentPage.findOne(node => node.type === 'COMPONENT' && node.name === 'guess_word_frame_comp');
+const guess_text_comp = figma.currentPage.findOne(node => node.type === 'COMPONENT' && node.name === 'guess_text_comp');
+
+const guess_word_frame_comp_2 = figma.currentPage.findOne(node => node.type === 'COMPONENT' && node.name === 'guess_word_frame_comp_2');
+const guess_text_comp_2 = figma.currentPage.findOne(node => node.type === 'COMPONENT' && node.name === 'guess_text_comp_2');
+
+const translation_word_comp = figma.currentPage.findOne(node => node.type === 'COMPONENT' && node.name === 'translation_word_comp');
+const translation_text_comp = figma.currentPage.findOne(node => node.type === 'COMPONENT' && node.name === 'translation_text_comp');
+
 async function translate_phrase(phrase, src_lang, dst_lang) {
 	const response = await fetch('http://localhost:30032/translate', {
 		method: 'POST',
@@ -102,8 +111,8 @@ const to_popular_lang_tags = new Set(["one_word", "text_source_content", "websit
 
 const phrase_2_word_translation_text = "universe";
 
-const phrase_1_text = "There is more in you than you know";
-const phrase_1_word_text = "more";
+const phrase_1_text = "The book was published";
+const phrase_1_word_text = "book";
 
 const phrase_3_text = "Every dream is a step toward wonder";
 const phrase_3_word_text = "dream";
@@ -213,7 +222,7 @@ async function fetchTranslation(originalText, textNodeName, src_lang, dst_lang, 
 				return { text: swapLastTwoChars(phrase_1_word_text), text_lang: 'en' };
 			} else {
 				let word_phrase = await translate_word_phrase(phrase_1_text, phrase_1_word_text, src_lang, popularLangs[0]);
-				return { text: swapLastTwoChars(word_phrase.dst_word), text_lang: popularLangs[0] };
+				return { text: swapLastTwoChars(word_phrase.dst_word.toLowerCase()), text_lang: popularLangs[0] };
 			}
 		}
 
@@ -222,7 +231,7 @@ async function fetchTranslation(originalText, textNodeName, src_lang, dst_lang, 
 				return { text: phrase_1_word_text, text_lang: 'en' };
 			} else {
 				let word_phrase = await translate_word_phrase(phrase_1_text, phrase_1_word_text, src_lang, popularLangs[0]);
-				return { text: word_phrase.dst_word, text_lang: popularLangs[0] };
+				return { text: word_phrase.dst_word.toLowerCase(), text_lang: popularLangs[0] };
 			}
 		}
 
@@ -231,7 +240,7 @@ async function fetchTranslation(originalText, textNodeName, src_lang, dst_lang, 
 				return { text: swapLastAndBefore2Last(phrase_1_word_text), text_lang: 'en' };
 			} else {
 				let word_phrase = await translate_word_phrase(phrase_1_text, phrase_1_word_text, src_lang, popularLangs[0]);
-				return { text: swapLastAndBefore2Last(word_phrase.dst_word), text_lang: popularLangs[0] };
+				return { text: swapLastAndBefore2Last(word_phrase.dst_word.toLowerCase()), text_lang: popularLangs[0] };
 			}
 		}
 
@@ -298,37 +307,63 @@ async function fetchTranslation(originalText, textNodeName, src_lang, dst_lang, 
 	}
 }
 
+async function setFontForText(text_lang, textNode) {
+	if (text_lang in exception_fonts) {
+		try {
+			const desiredFont = { family: exception_fonts[dst_lang], style: textNode.fontName.style };
+			await figma.loadFontAsync(desiredFont);
+			textNode.fontName = desiredFont;
+		} catch (error) {
+			console.error("Error setting font or translating text:", error);
+		}
+	}
+}
+
 async function translateAllInstances(ui_src_lang, dst_lang, paddingY, popularLangs) {
 	for (const targetComponentName of targetComponentsNames) {
+		if (targetComponentName == "4_store_topic_generation") return;
+
 		const targetComponent = targetComponentsMap[targetComponentName];
 	
 		if (targetComponent) {
 			const originalX = targetComponent.x;
 			const originalY = targetComponent.y;
 	
-			let instance = targetComponent.createInstance();
-			instance.name = instance.name + `_${dst_lang}`;
+			let instance_tmp = targetComponent.createInstance();
 
+			let instance = (targetComponentName === "2_store_simple_and_fast" || targetComponentName === "3_store_instant_feedback") ? instance_tmp.detachInstance() : instance_tmp;
+
+			if (targetComponentName === "2_store_simple_and_fast" || targetComponentName === "3_store_instant_feedback") {
+				let inside_instance = instance.findAllWithCriteria({ types: ['INSTANCE'] }).find(ins => ins.name === 'learn screen store 3');
+				inside_instance.detachInstance();
+			}
+
+			instance.name = instance.name + `_${dst_lang}`;
+			
 			if (!instance) {
 				console.error('The instance is null or undefined.');
 				console.log('Instance type:', instance.type);
 				return;
 			}
-			
-			// Ensure that instance is a ComponentInstance
-			if (instance.type !== 'INSTANCE') {
-				console.error('The node is not a ComponentInstance:', instance);
-				return;
-			}
+
+			// // Ensure that instance is a ComponentInstance
+			// if (instance.type !== 'INSTANCE') {
+			// 	console.error('The node is not a ComponentInstance:', instance);
+			// 	return;
+			// }
 	
 			instance.x = originalX;
 			instance.y = originalY + paddingY;
-	
+
 			async function translateInstanceTexts() {
 				const textNodes = instance.findAllWithCriteria({ types: ['TEXT'] });
 			
 				for (const textNode of textNodes) {
 					if (textNode.name === "no_translation") {
+						continue;
+					}
+
+					if (textNode.name !== "translate" && (targetComponentName === "2_store_simple_and_fast" || targetComponentName === "3_store_instant_feedback")) {
 						continue;
 					}
 	
@@ -360,7 +395,82 @@ async function translateAllInstances(ui_src_lang, dst_lang, paddingY, popularLan
 					textNode.characters = translation_result.text;
 				}
 			}
-	
+
+			async function setInstanceText(inst, text) {
+				let textNode = inst.findOne(node => node.type === 'TEXT');
+				textNode.characters = text;
+			}
+
+			async function setInstanceValidFont(inst, text_lang) {
+				let textNode = inst.findOne(node => node.type === 'TEXT');
+				await setFontForText(text_lang, textNode);
+			}
+
+			async function createPhrasesTranslation(targetComponentName) {
+				let frame_to_fill = instance.findAllWithCriteria({ types: ['FRAME'] }).find(frame => frame.name === 'frame_to_fill');
+				let guess_frame = frame_to_fill.findAllWithCriteria({ types: ['FRAME'] }).find(frame => frame.name === 'guess_frame');
+
+				let is_first_comp = targetComponentName === '2_store_simple_and_fast';
+
+				let phrase_1_highlight_space = (await fetchTranslation('', is_first_comp ? 'phrase_1_guess_space' : 'phrase_3_word', ui_src_lang, dst_lang, popularLangs)).text;
+				let phrase_1 = (await fetchTranslation('', is_first_comp ? 'phrase_1_guess' : 'phrase_3', ui_src_lang, dst_lang, popularLangs)).text;
+				let phrase_1_splited = phrase_1.split(" ");
+
+				while (guess_frame.children.length > 0) {
+					guess_frame.children[0].remove();
+				}
+
+				for (let phrase_part of phrase_1_splited) {
+					if (phrase_part.toLowerCase() === phrase_1_highlight_space.toLowerCase()) {
+						let inst = is_first_comp ? guess_word_frame_comp.createInstance() : guess_word_frame_comp_2.createInstance();
+						setInstanceText(inst, phrase_1_highlight_space);
+						guess_frame.appendChild(inst);
+					} else {
+						let inst = is_first_comp ? guess_text_comp.createInstance() : guess_text_comp_2.createInstance();
+						setInstanceText(inst, phrase_part);
+						guess_frame.appendChild(inst);
+					}
+				}
+
+				let translation_frame = frame_to_fill.findAllWithCriteria({ types: ['FRAME'] }).find(frame => frame.name === 'translation_frame');
+
+				while (translation_frame.children.length > 0) {
+					translation_frame.children[0].remove();
+				}
+				
+				let phrase_1_translation_result = (await fetchTranslation('', is_first_comp ? 'phrase_1_translation' : 'phrase_3_translation', ui_src_lang, dst_lang, popularLangs));
+				let phrase_1_translation = phrase_1_translation_result.text;
+				let phrase_1_translation_lang = phrase_1_translation_result.text_lang;
+				let phrase_1_word_translation = (await fetchTranslation('', is_first_comp ? 'phrase_1_word_translation' : 'phrase_3_word_translation', ui_src_lang, dst_lang, popularLangs)).text;
+
+				let phrase_1_translation_splited = phrase_1_translation.split(" ");
+
+				for (let phrase_part of phrase_1_translation_splited) {
+					if (phrase_part.toLowerCase() === phrase_1_word_translation.toLowerCase()) {
+						let inst = translation_word_comp.createInstance();
+						setInstanceText(inst, phrase_part);
+						await setInstanceValidFont(inst, phrase_1_translation_lang);
+						translation_frame.appendChild(inst);
+					} else {
+						let inst = translation_text_comp.createInstance();
+						setInstanceText(inst, phrase_part);
+						await setInstanceValidFont(inst, phrase_1_translation_lang);
+						translation_frame.appendChild(inst);
+					}
+				}
+
+
+				let random_words = frame_to_fill.findAllWithCriteria({ types: ['TEXT'] })
+					.filter(text => text.name === 'random_word_1' || text.name === 'random_word_2' || text.name === 'random_word_3');
+
+				for (let random_word of random_words) {
+					random_word.characters = (await fetchTranslation('', random_word.name, ui_src_lang, dst_lang, popularLangs)).text;
+				}
+			}
+
+			if (targetComponentName == "2_store_simple_and_fast" || targetComponentName == "3_store_instant_feedback") {
+				await createPhrasesTranslation(targetComponentName);
+			}
 			await translateInstanceTexts();
 		} else {
 			error_count += 1;
@@ -374,35 +484,18 @@ let paddingBetween = 100;
 
 let paddingY = heightOfComponent + paddingBetween;
 
-let counterBreak = 0;
-
-
-const test_set = new Set([
-	'es',
-	'ru',
-	'ru',
-	'ru',
-	'ru',
-	'es',
-	'ru'
-]);
-
 for (const [dst_lang, popular_langs] of Object.entries(languages)) {
 	const ui_src_lang = 'en';
 
 	// if (!(dst_lang in exception_fonts)) continue;
 
-	// if (!test_set.has(popular_langs[0])) continue;
+	if (dst_lang != 'hy') continue;
+	console.log(`dst_lang: ${dst_lang}`);
 
 	if (excluded_langs.has(dst_lang)) continue;
 	await translateAllInstances(ui_src_lang, dst_lang, paddingY, popular_langs);
 
 	paddingY = paddingY + heightOfComponent + paddingBetween;
-
-	counterBreak += 1;
-	if (counterBreak > 1) {
-		// break;
-	}
 }
 
 console.log(`Error count: ${error_count}`);
