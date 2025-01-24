@@ -12,7 +12,7 @@ import hashlib
 import openai_translate_app_utils
 import psycopg2
 
-directory_path = "/Users/c/Documents/a_screenshots/"
+directory_path = "/Users/c/Documents/a_screenshots_2/"
 
 language_screenshots = defaultdict(list)
 
@@ -38,14 +38,15 @@ for lang, files in language_screenshots.items():
 TRACK = 'alpha'
 
 app_name_p1 = 'svocab: '
-app_name_p2 = 'Phrases generator'
+app_name_p2 = 'Learn any words'
+app_name_p2_shorter = 'Learn words'
 app_name_max_len = 30
 
 title_src = app_name_p1 + app_name_p2
 
-short_description_src = 'Learn languages and millions of words with generated phrases from your sources'
-short_description_shorter_src = 'Learn languages and words with generated phrases from your sources'
-short_description_even_shorter_src = 'Learn languages and words with generated phrases'
+short_description_src = 'Learn any words and improve your vocabulary, create generated topics'
+short_description_shorter_src = 'Learn any words and improve your vocabulary'
+short_description_even_shorter_src = 'Improve your vocabulary'
 
 short_description_max_len = 80
 
@@ -194,11 +195,17 @@ def translate_text(db_conn, db_cur, src_text, lang_code, translation_logic):
 
 # translation app title
 def openai_title_translation(src_title, dst_lang):
-    prompt = 'translate this play store part of ai generation app title "' + src_title + '" in formal and form to ' + dst_lang + ' maximum length is 23 symbols, output this only as json {"translated_title": ""}'
+    prompt = 'translate this play store part of ai generation app title "' + src_title + '" in formal and form to ' + dst_lang + ' maximum length is 22 symbols, output this only as json {"translated_title": ""}'
     return openai_translate_app_utils.openai_prompt_exec(prompt)
 
 def openai_is_description_translation_valid(src_description, dst_description, dst_lang_name):
-    prompt = 'is ' + dst_lang_name + ' description ' + dst_description + ' a possible translation for English ' + src_description + ', output only yes or no'
+    prompt = 'is ' + dst_lang_name + ' ' + dst_description + ' a possible close translation for English ' + src_description + ', output only yes or no'
+    result = openai_translate_app_utils.openai_prompt_exec(prompt)
+    return 'yes' in result.lower()
+
+
+def openai_is_title_translation_valid(src_description, dst_description, dst_lang_name):
+    prompt = 'is ' + dst_lang_name + ' title ' + dst_description + ' a possible close translation for English ' + src_description + ', output only yes or no'
     result = openai_translate_app_utils.openai_prompt_exec(prompt)
     return 'yes' in result.lower()
 
@@ -207,12 +214,22 @@ def title_translation_logic(src_text, dst_lang_name):
     extracted_text = openai_translate_app_utils.extract_phrase_from_prompt_by_key(prompt_result, 'translated_title')
     translated_text = openai_translate_app_utils.remove_periods_from_end(extracted_text)
 
-    if len(translated_text) > 23 or len(translated_text) == 0:
-        raise Exception("not valid length")
+    if len(translated_text) > 22 or len(translated_text) == 0:
+        src_text = app_name_p2_shorter
+        prompt_result = openai_title_translation(src_text, dst_lang_name)
+        extracted_text = openai_translate_app_utils.extract_phrase_from_prompt_by_key(prompt_result, 'translated_title')
+        translated_text = openai_translate_app_utils.remove_periods_from_end(extracted_text)
 
-    is_valid = openai_is_description_translation_valid(src_text, translated_text, dst_lang_name)
+        if len(translated_text) > 22 or len(translated_text) == 0:
+            print(f"text: '{translated_text}', len: '{len(translated_text)}'")
+            raise Exception("not valid length")
+        
+    print(src_text)
+    print(translated_text)
+
+    is_valid = openai_is_title_translation_valid(src_text, translated_text, dst_lang_name)
     if not is_valid:
-        raise Exception("openai translation not valid")
+        raise Exception("openai title translation not valid")
     return translated_text
 
 # translation app short description
@@ -230,13 +247,16 @@ def short_description_translation_logic(src_text, dst_lang_name):
         prompt_result = openai_short_description_translation(src_text, dst_lang_name)
         extracted_text = openai_translate_app_utils.extract_phrase_from_prompt_by_key(prompt_result, 'translated_description')
         translated_text = openai_translate_app_utils.remove_periods_from_end(extracted_text)
+        print(f"text: '{translated_text}', len: '{len(translated_text)}'")
 
         if len(translated_text) > 80 or len(translated_text) == 0:
             src_text = short_description_even_shorter_src
             prompt_result = openai_short_description_translation(src_text, dst_lang_name)
             extracted_text = openai_translate_app_utils.extract_phrase_from_prompt_by_key(prompt_result, 'translated_description')
             translated_text = openai_translate_app_utils.remove_periods_from_end(extracted_text)
+            print(f"text: '{translated_text}', len: '{len(translated_text)}'")
             if len(translated_text) > 80 or len(translated_text) == 0:
+                print(f"text: '{translated_text}', len: '{len(translated_text)}'")
                 raise Exception(f"not valid length: {len(translated_text)}")
 
     is_valid = openai_is_description_translation_valid(src_text, translated_text, dst_lang_name)
@@ -336,18 +356,20 @@ def main():
         changes_to_commit = 8
         changes_made = 0
         edit_id = ''
+        
 
         for lang_code in language_screenshots:
             # if lang_code != 'ru':
             #     continue
             localization_code = get_popular_localization(lang_code)
-            
+
             if localization_code is None:
                 print(f"localization code is none: {lang_code}")
                 continue
             
             if edit_id == '':
                 edit_id = create_edit_session(service)
+                print(f"new_edit_id: {edit_id}")
 
             listing_updated = is_listing_updated(service, edit_id, localization_code, titles[lang_code], short_descriptions[lang_code], long_descriptions[lang_code])
             if not listing_updated:
@@ -363,12 +385,6 @@ def main():
                 remove_screenshots(service, edit_id, localization_code)
                 upload_screenshots(service, edit_id, localization_code, screenshot_files)
                 changes_made += 1
-
-            # if edit_id != '' and changes_made >= changes_to_commit:
-            #     commit_edit(service, edit_id)
-            #     print('commit made')
-            #     edit_id = ''
-            #     changes_made = 0
     
         if edit_id != '' and changes_made > 0:
             commit_edit(service, edit_id)
