@@ -99,6 +99,8 @@ def translate_word_phrase(src_phrase, src_word, src_lang_code, dst_lang_code, db
 
     if word_phrase_translation_db is not None:
         return word_phrase_translation_db
+    
+    print(f"word_phrase_translation_db {word_phrase_translation_db}")
 
     # generation required
     max_retry = 8
@@ -135,7 +137,7 @@ def translate_word_phrase(src_phrase, src_word, src_lang_code, dst_lang_code, db
                 db_cur,
                 generate_figma_screenshots_utils.WordPhrasePair(src_lang_code, dst_lang_code, src_word, dst_word, src_phrase, dst_phrase)
             )
-
+            
             output_result = f"Done: \n\src_word ({src_lang_code}): {src_word};\n\dst_word ({dst_lang_code}): {dst_word};"
             output_result = output_result + f"\n\tsrc_phrase ({src_lang_code}): {src_phrase};\n\tdst_phrase ({dst_lang_code}): {dst_phrase};\n\tprompt: {prompt_result};"
             print(Back.GREEN + output_result)
@@ -150,6 +152,17 @@ def translate_word_phrase(src_phrase, src_word, src_lang_code, dst_lang_code, db
 
     print(Back.RED + f"failed to translate src_phrase: {src_phrase}")
     return None
+
+
+def match_original_case(original: str, translated: str) -> str:
+    if original.isupper():
+        return translated.upper()
+    elif original.islower():
+        return translated.lower()
+    elif original.istitle():
+        return translated.title()
+    else:
+        return translated
 
 
 @app.route('/translate', methods=['POST'])
@@ -178,6 +191,7 @@ def translate_text():
         
         try:
             translated_phrase = translate_phrase(original_text, src_lang_code, dst_lang_code, db_conn, db_cur)
+            translated_phrase = match_original_case(original_text, translated_phrase)
         except Exception as e:
             print(f"got exception: {e}")
             traceback.print_exc()

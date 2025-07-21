@@ -15,9 +15,19 @@ def add_word_phrase_to_db(db_conn, db_cur, word_phrase_data: WordPhrasePair):
     sql = """
         INSERT INTO word_phrase_pair (src_lang, dst_lang, src_word, dst_word, src_phrase, dst_phrase)
         VALUES (%s, %s, %s, %s, %s, %s)
-        ON CONFLICT (src_lang, dst_lang, src_word, dst_word) DO NOTHING
+        ON CONFLICT (src_lang, dst_lang, src_word, dst_word)
+        DO UPDATE SET
+            src_phrase = EXCLUDED.src_phrase,
+            dst_phrase = EXCLUDED.dst_phrase
     """
-    data = (word_phrase_data.src_lang, word_phrase_data.dst_lang, word_phrase_data.src_word, word_phrase_data.dst_word, word_phrase_data.src_phrase, word_phrase_data.dst_phrase)
+    data = (
+        word_phrase_data.src_lang,
+        word_phrase_data.dst_lang,
+        word_phrase_data.src_word,
+        word_phrase_data.dst_word,
+        word_phrase_data.src_phrase,
+        word_phrase_data.dst_phrase
+    )
     db_cur.execute(sql, data)
     db_conn.commit()
 

@@ -218,7 +218,7 @@ def openai_prompt_exec(prompt):
     client = OpenAI(timeout=httpx.Timeout(15.0, read=30.0, write=10.0, connect=3.0))
 
     completion = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4.1-mini",
         messages=messages,
     )
 
